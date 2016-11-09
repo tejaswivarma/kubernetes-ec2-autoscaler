@@ -76,6 +76,5 @@ def get_unit_capacity(group):
     AutoScalingGroup or KubeNode
     """
     computing = group.selectors.get(COMPUTING_SELECTOR_KEY, 'false')
-    instance_type = group.launch_config['InstanceType']
     unit_caps = RESOURCE_SPEC[computing]
-    return unit_caps[instance_type]
+    return unit_caps[group.instance_type]

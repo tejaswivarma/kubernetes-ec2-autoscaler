@@ -11,6 +11,7 @@ import datadog
 import pykube
 
 import autoscaler.autoscaling_groups as autoscaling_groups
+import autoscaler.azure as azure
 import autoscaler.capacity as capacity
 from autoscaler.kube import KubePod, KubeNode, KubeResource, KubePodStatus
 import autoscaler.utils as utils
@@ -69,8 +70,9 @@ class Cluster(object):
         'm4.10xlarge': 0
     }
 
-    def __init__(self, regions, aws_access_key, aws_secret_key,
-                 kubeconfig, idle_threshold, type_idle_threshold,
+    def __init__(self, aws_regions, aws_access_key, aws_secret_key,
+                 azure_regions, kubeconfig,
+                 idle_threshold, type_idle_threshold,
                  instance_init_time, cluster_name, notifier,
                  scale_up=True, maintainance=True,
                  datadog_api_key=None,
@@ -88,14 +90,16 @@ class Cluster(object):
         self.session = boto3.session.Session(
             aws_access_key_id=aws_access_key,
             aws_secret_access_key=aws_secret_key,
-            region_name=regions[0])  # provide a default region
+            region_name=aws_regions[0])  # provide a default region
         self.autoscaling_groups = autoscaling_groups.AutoScalingGroups(
-            session=self.session, regions=regions,
+            session=self.session, regions=aws_regions,
             cluster_name=cluster_name)
         self.autoscaling_timeouts = autoscaling_groups.AutoScalingTimeouts(self.session)
 
+        self.azure_groups = azure.AzureGroups(azure_regions)
+
         # config
-        self.regions = regions
+        self.regions = aws_regions
         self.idle_threshold = idle_threshold
         self.instance_init_time = instance_init_time
         self.type_idle_threshold = type_idle_threshold
@@ -140,19 +144,23 @@ class Cluster(object):
                         node.count_pod(pod)
 
             asgs = self.autoscaling_groups.get_all_groups(all_nodes)
+            azure_groups = self.azure_groups.get_all_groups(all_nodes)
+            scaling_groups = asgs + azure_groups
 
             pods_to_schedule = self.get_pods_to_schedule(pods)
 
             if self.scale_up:
                 logger.info("++++++++++++++ Scaling Up Begins ++++++++++++++++")
                 self.scale(
-                    pods_to_schedule, all_nodes, asgs, running_insts_map)
+                    pods_to_schedule, all_nodes, scaling_groups,
+                    running_insts_map)
                 logger.info("++++++++++++++ Scaling Up Ends ++++++++++++++++")
             if self.maintainance:
                 logger.info("++++++++++++++ Maintenance Begins ++++++++++++++++")
                 self.maintain(
                     managed_nodes, running_insts_map,
-                    pods_to_schedule, running_or_pending_assigned_pods, asgs)
+                    pods_to_schedule, running_or_pending_assigned_pods,
+                    scaling_groups)
                 logger.info("++++++++++++++ Maintenance Ends ++++++++++++++++")
 
             return True

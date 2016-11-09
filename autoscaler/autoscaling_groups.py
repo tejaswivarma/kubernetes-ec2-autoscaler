@@ -3,14 +3,10 @@ import logging
 import re
 
 import botocore
-from pykube.objects import Pod
 
 import autoscaler.aws_utils as aws_utils
 import autoscaler.capacity as capacity
 import autoscaler.utils as utils
-
-# we are interested in all pods, incl. system ones
-Pod.objects.namespace = None
 
 logger = logging.getLogger(__name__)
 
@@ -325,6 +321,7 @@ class AutoScalingGroup(object):
         self.max_size = raw_group['MaxSize']
 
         self.is_spot = launch_config.get('SpotPrice') is not None
+        self.instance_type = launch_config['InstanceType']
 
         self.instance_ids = set(inst['InstanceId'] for inst in raw_group['Instances']
                                 if inst.get('InstanceId'))
@@ -351,10 +348,6 @@ class AutoScalingGroup(object):
         selectors['failure-domain.beta.kubernetes.io/region'] = selectors['aws/region']
 
         return selectors
-
-    @property
-    def max_resource_capacity(self):
-        return self.max_size * capacity.get_unit_capacity(self)
 
     @property
     def actual_capacity(self):
