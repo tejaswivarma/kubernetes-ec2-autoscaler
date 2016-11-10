@@ -99,7 +99,8 @@ class Cluster(object):
         self.azure_groups = azure.AzureGroups(azure_regions)
 
         # config
-        self.regions = aws_regions
+        self.azure_regions = azure_regions
+        self.aws_regions = aws_regions
         self.idle_threshold = idle_threshold
         self.instance_init_time = instance_init_time
         self.type_idle_threshold = type_idle_threshold
@@ -291,11 +292,21 @@ class Cluster(object):
         given a list of KubeNode's, return a map of
         instance_id -> ec2.Instance object
         """
+        instance_map = {}
+
+        # first get azure instances
+        for region in self.azure_regions:
+            client = azure.AzureClient(region)
+            instances_data = client.list_instances()
+            instances = [azure.AzureInstance(inst_data) for inst_data in instances_data['instances']]
+            instance_map.update((inst.id, inst) for inst in instances)
+
+        # now get aws instances
         instance_id_by_region = {}
         for node in nodes:
-            instance_id_by_region.setdefault(node.region, []).append(node.instance_id)
+            if node.provider == 'aws':
+                instance_id_by_region.setdefault(node.region, []).append(node.instance_id)
 
-        instance_map = {}
         for region, instance_ids in instance_id_by_region.items():
             # note that this assumes that all instances have a valid region
             # the regions referenced by the nodes may also be outside of the
@@ -337,10 +348,13 @@ class Cluster(object):
         def sort_key(group):
             region = self._GROUP_DEFAULT_PRIORITY
             try:
-                region = self.regions.index(group.region)
+                region = self.azure_regions.index(group.region)
             except ValueError:
-                pass
-            priority = self._GROUP_PRIORITIES.get(group.selectors.get('aws/type'), self._GROUP_DEFAULT_PRIORITY)
+                try:
+                    region = len(self.azure_regions) + self.aws_regions.index(group.region)
+                except ValueError:
+                    pass
+            priority = self._GROUP_PRIORITIES.get(group.instance_type, self._GROUP_DEFAULT_PRIORITY)
             return (region, not group.is_spot, priority, group.name)
         return sorted(groups, key=sort_key)
 
@@ -452,7 +466,10 @@ class Cluster(object):
         """
         scale up logic
         """
-        self.autoscaling_timeouts.refresh_timeouts(asgs, dry_run=self.dry_run)
+        # TODO: generalize to azure
+        self.autoscaling_timeouts.refresh_timeouts(
+            [asg for asg in asgs if asg.provider == 'aws'],
+            dry_run=self.dry_run)
 
         cached_live_nodes = []
         for node in all_nodes:
@@ -579,6 +596,10 @@ class Cluster(object):
         #   i.e. not having registered to kube or not having proper meta data set
         managed_instance_ids = set(node.instance_id for node in cached_managed_nodes)
         for asg in asgs:
+            # TODO: generalize to azure
+            if asg.provider != 'aws':
+                continue
+
             unmanaged_instance_ids = list(asg.instance_ids - managed_instance_ids)
             if len(unmanaged_instance_ids) != 0:
                 unmanaged_running_insts = self.get_running_instances_in_region(

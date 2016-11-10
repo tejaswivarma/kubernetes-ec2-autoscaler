@@ -52,7 +52,7 @@ SI_suffix = {
     'Pi': 2**50,
     'Ei': 2**60,
 }
-SI_regex = re.compile(r"(\d+)(%s)?$" % "|".join(SI_suffix.keys()))
+SI_regex = re.compile(r"([0-9.]+)(%s)?$" % "|".join(SI_suffix.keys()))
 
 
 def parse_SI(s):

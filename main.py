@@ -25,7 +25,7 @@ DEBUG_LOGGING_MAP = {
 @click.option("--kubeconfig", default=None,
               help='Full path to kubeconfig file. If not provided, '
                    'we assume that we\'re running on kubernetes.')
-@click.option("--idle-threshold", default=3600)
+@click.option("--idle-threshold", default=3300)
 @click.option("--type-idle-threshold", default=3600*24*7)
 @click.option("--over-provision", default=5)
 @click.option("--aws-access-key", default=None, envvar='AWS_ACCESS_KEY_ID')

@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
       - name: autoscaler
-        image: quay.io/openai/kubernetes-ec2-autoscaler
+        image: quay.io/openai/kubernetes-ec2-autoscaler:azure
         env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
@@ -46,11 +46,13 @@ spec:
           value: 10.100.0.1
           # value: kubernetes.default
         - name: DATADOG_TAGS
-          value: env:sci
+          value: env:dev
         command:
             - python
             - main.py
-            - --regions
+            - --azure-regions
+            - us-south-central
+            - --aws-regions
             - us-west-2,us-east-1,us-west-1
             - --cluster-name
             - openai-kubernetes
@@ -63,6 +65,6 @@ spec:
             - "30"
         imagePullPolicy: Always
       restartPolicy: Always
-      dnsPolicy: Default  # Don't use cluster DNS.
+      # dnsPolicy: Default  # Don't use cluster DNS.
       nodeSelector:
         aws/region: us-west-2

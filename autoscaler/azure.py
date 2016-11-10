@@ -1,7 +1,7 @@
-import json
 import logging
 import urlparse
 
+from dateutil.parser import parse as dateutil_parse
 import requests
 
 from autoscaler.autoscaling_groups import AutoScalingGroup
@@ -23,12 +23,19 @@ class AzureClient(object):
         return req.json()
 
     def create_instances(self, instance_type, number, tags):
+        url = self._url('instances')
         data = {
             'instance_type': instance_type,
             'number': number,
-            'tags': json.dumps(tags)
+            'tags': tags
         }
-        req = requests.post(self._url('instances'), data=data)
+
+        logger.debug('POST %s (data=%s)', url, data)
+
+        req = requests.post(url, json=data)
+
+        logger.debug('response: %s', req.text)
+
         req.raise_for_status()
         return req.json()
 
@@ -38,7 +45,7 @@ class AzureClient(object):
         return req.json()
 
     def get_tags(self):
-        req = requests.get(self._url('available-tags'))
+        req = requests.get(self._url('allowed_launch_parameters'))
         req.raise_for_status()
         return req.json()
 
@@ -55,27 +62,38 @@ class AzureGroups(object):
             tags = client.get_tags()
             instances = client.list_instances()
 
-            for tag_set in tags['allowed-tag-sets']:
+            for tag_set in tags['parameter_sets']:
                 instance_type = tag_set['instance_type']
                 tags = tag_set['tags']
                 group_instances = [
-                    inst for inst in instances
+                    inst for inst in instances['instances']
                     if inst['instance_type'] == instance_type and all(inst['tags'][k] == tags[k] for k in tags.keys())]
-                group = AzureGroup(instance_type, tags, group_instances, kube_nodes)
+                group = AzureGroup(client, instance_type, tags, group_instances, kube_nodes)
                 groups.append(group)
 
         return groups
 
 
 class AzureGroup(AutoScalingGroup):
+    provider = 'azure'
+
     def __init__(self, client, instance_type, tags, instances, kube_nodes):
         self.client = client
         self.instance_type = instance_type
-        self.selectors = tags
+        self.tags = tags
         self.name = instance_type
         self.desired_capacity = len(instances)
+
+        self.selectors = dict(tags)
+        # HACK: for matching node selectors
+        self.selectors['azure/type'] = self.instance_type
+        self.selectors['azure/region'] = self.region
+
         self.min_size = 0
         self.max_size = 1000
+        self.is_spot = False
+
+        self.region = client.region
 
         self.instance_ids = set(inst['id'] for inst in instances)
         self.nodes = [node for node in kube_nodes
@@ -83,7 +101,7 @@ class AzureGroup(AutoScalingGroup):
         self.unschedulable_nodes = filter(
             lambda n: n.unschedulable, self.nodes)
 
-        self._id = (client.region, self.name)
+        self._id = (self.region, self.name)
 
     def set_desired_capacity(self, new_desired_capacity):
         """
@@ -93,9 +111,10 @@ class AzureGroup(AutoScalingGroup):
         """
         logger.info("ASG: {} new_desired_capacity: {}".format(
             self, new_desired_capacity))
+
         self.client.create_instances(self.instance_type,
                                      new_desired_capacity - len(self.instance_ids),
-                                     self.selectors)
+                                     self.tags)
         self.desired_capacity = new_desired_capacity
 
     def scale_node_in(self, node):
@@ -113,3 +132,13 @@ class AzureGroup(AutoScalingGroup):
 
     def __repr__(self):
         return str(self)
+
+
+class AzureInstance(object):
+    provider = 'azure'
+
+    def __init__(self, data):
+        self.id = data['id']
+        self.instance_type = data['instance_type']
+        self.launch_time = dateutil_parse(data['launch_time'])
+        self.tags = data['tags']

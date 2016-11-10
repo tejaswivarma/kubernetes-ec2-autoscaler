@@ -96,7 +96,7 @@ class KubeNode(object):
 
         metadata = node.obj['metadata']
         self.name = metadata['name']
-        self.instance_id, self.region, self.instance_type = self._get_instance_data()
+        self.instance_id, self.region, self.instance_type, self.provider = self._get_instance_data()
         self.selectors = metadata['labels']
 
         self.capacity = KubeResource(**node.obj['status']['capacity'])
@@ -114,14 +114,20 @@ class KubeNode(object):
         provider = self.original.obj['spec'].get('providerID', '')
         if provider.startswith('aws://'):
             az, instance_id = tuple(provider.split('/')[-2:])
-            return (instance_id, az[:-1], instance_type)
+            return (instance_id, az[:-1], instance_type, 'aws')
 
         if labels.get('aws/id') and labels.get('aws/az'):
             instance_id = labels['aws/id']
             region = labels['aws/az'][:-1]
-            return (instance_id, region, instance_type)
+            return (instance_id, region, instance_type, 'aws')
 
-        return (None, '', None)
+        if labels.get('azure/id'):
+            instance_id = labels['azure/id']
+            region = labels['azure/region']
+            instance_type = labels['azure/type']
+            return (instance_id, region, instance_type, 'azure')
+
+        return (None, '', None, None)
 
     def drain(self, pods, notifier=None):
         for pod in pods:

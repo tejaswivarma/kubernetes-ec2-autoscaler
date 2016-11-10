@@ -5,7 +5,6 @@ import re
 import botocore
 
 import autoscaler.aws_utils as aws_utils
-import autoscaler.capacity as capacity
 import autoscaler.utils as utils
 
 logger = logging.getLogger(__name__)
@@ -303,6 +302,8 @@ class AutoScalingTimeouts(object):
 
 
 class AutoScalingGroup(object):
+    provider = 'aws'
+
     def __init__(self, client, region, kube_nodes, raw_group, launch_config):
         """
         client - boto3 AutoScaling.Client
