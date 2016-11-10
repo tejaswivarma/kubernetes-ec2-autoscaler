@@ -84,6 +84,8 @@ class AzureGroup(AutoScalingGroup):
         self.name = instance_type
         self.desired_capacity = len(instances)
 
+        self.region = client.region
+
         self.selectors = dict(tags)
         # HACK: for matching node selectors
         self.selectors['azure/type'] = self.instance_type
@@ -92,8 +94,6 @@ class AzureGroup(AutoScalingGroup):
         self.min_size = 0
         self.max_size = 1000
         self.is_spot = False
-
-        self.region = client.region
 
         self.instance_ids = set(inst['id'] for inst in instances)
         self.nodes = [node for node in kube_nodes
