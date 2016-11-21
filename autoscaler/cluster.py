@@ -169,6 +169,164 @@ class Cluster(object):
             logger.warn(e)
             return False
 
+    def scale(self, pods_to_schedule, all_nodes, asgs, running_insts_map):
+        """
+        scale up logic
+        """
+        # TODO: generalize to azure
+        self.autoscaling_timeouts.refresh_timeouts(
+            [asg for asg in asgs if asg.provider == 'aws'],
+            dry_run=self.dry_run)
+
+        cached_live_nodes = []
+        for node in all_nodes:
+            # either we know the physical node behind it and know it's alive
+            # or we don't know it and assume it's alive
+            if (node.instance_id and node.instance_id in running_insts_map) \
+                    or (not node.is_managed()):
+                cached_live_nodes.append(node)
+
+        # asg name -> pending KubePods
+        pending_pods = {}
+
+        # for each pending & unassigned job, try to fit them on current machines or count requested
+        #   resources towards future machines
+        for selectors_hash, pods in pods_to_schedule.items():
+            for pod in pods:
+                fitting = None
+                for node in cached_live_nodes:
+                    if node.can_fit(pod.resources):
+                        fitting = node
+                        break
+                if fitting is None:
+                    # because a pod may be able to fit in multiple groups
+                    # pick a group now
+                    pending_pods.setdefault(selectors_hash, []).append(pod)
+                    logger.info(
+                        "{pod} is pending ({selectors_hash})".format(
+                            pod=pod, selectors_hash=selectors_hash))
+                else:
+                    fitting.count_pod(pod)
+                    logger.info("{pod} fits on {node}".format(pod=pod,
+                                                              node=fitting))
+
+        # scale each node type to reach the new capacity
+        for selectors_hash, pending in pending_pods.items():
+            self.fulfill_pending(asgs, selectors_hash, pending)
+
+        # TODO: make sure desired capacities of untouched groups are consistent
+
+    def maintain(self, cached_managed_nodes, running_insts_map,
+                 pods_to_schedule, running_or_pending_assigned_pods, asgs):
+        """
+        maintains running instances:
+        - determines if idle nodes should be drained and terminated
+        - determines if there are bad nodes in ASGs (did not spin up under
+          `instance_init_time` seconds)
+        """
+        logger.info("++++++++++++++ Maintaining Managed Nodes ++++++++++++++++")
+
+        # for each type of instance, we keep one around for longer
+        # in order to speed up job start up time
+        idle_selector_hash = collections.Counter()
+
+        pods_by_node = {}
+        for p in running_or_pending_assigned_pods:
+            pods_by_node.setdefault(p.node_name, []).append(p)
+
+        stats_time = time.time()
+
+        for node in cached_managed_nodes:
+            asg = utils.get_group_for_node(asgs, node)
+            state = self.get_node_state(
+                node, asg, pods_by_node.get(node.name, []), pods_to_schedule,
+                running_insts_map, idle_selector_hash)
+
+            logger.info("node: %-*s state: %s" % (75, node, state))
+            self.stats.increment(
+                'kubernetes.custom.node.state.{}'.format(state.replace('-', '_')),
+                timestamp=stats_time)
+
+            # state machine & why doesnt python have case?
+            if state in (ClusterNodeState.POD_PENDING, ClusterNodeState.BUSY,
+                         ClusterNodeState.GRACE_PERIOD,
+                         ClusterNodeState.TYPE_GRACE_PERIOD,
+                         ClusterNodeState.ASG_MIN_SIZE,
+                         ClusterNodeState.LAUNCH_HR_GRACE_PERIOD):
+                # do nothing
+                pass
+            elif state == ClusterNodeState.UNDER_UTILIZED_DRAINABLE:
+                if not self.dry_run:
+                    if not asg:
+                        logger.warn('Cannot find ASG for node %s. Not cordoned.', node)
+                    else:
+                        node.cordon()
+                        node.drain(pods_by_node.get(node.name, []), notifier=self.notifier)
+                else:
+                    logger.info('[Dry run] Would have drained and cordoned %s', node)
+            elif state == ClusterNodeState.IDLE_SCHEDULABLE:
+                if not self.dry_run:
+                    if not asg:
+                        logger.warn('Cannot find ASG for node %s. Not cordoned.', node)
+                    else:
+                        node.cordon()
+                else:
+                    logger.info('[Dry run] Would have cordoned %s', node)
+            elif state == ClusterNodeState.BUSY_UNSCHEDULABLE:
+                # this is duplicated in original scale logic
+                if not self.dry_run:
+                    node.uncordon()
+                else:
+                    logger.info('[Dry run] Would have uncordoned %s', node)
+            elif state == ClusterNodeState.IDLE_UNSCHEDULABLE:
+                # remove it from asg
+                if not self.dry_run:
+                    if not asg:
+                        logger.warn('Cannot find ASG for node %s. Not terminated.', node)
+                    else:
+                        asg.scale_node_in(node)
+                else:
+                    logger.info('[Dry run] Would have scaled in %s', node)
+            elif state == ClusterNodeState.INSTANCE_TERMINATED:
+                if not self.dry_run:
+                    node.delete()
+                else:
+                    logger.info('[Dry run] Would have deleted %s', node)
+            elif state == ClusterNodeState.UNDER_UTILIZED_UNDRAINABLE:
+                # noop for now
+                pass
+            else:
+                raise Exception("Unhandled state: {}".format(state))
+
+        logger.info("++++++++++++++ Maintaining Unmanaged Instances ++++++++++++++++")
+        # these are instances that have been running for a while but it's not properly managed
+        #   i.e. not having registered to kube or not having proper meta data set
+        managed_instance_ids = set(node.instance_id for node in cached_managed_nodes)
+        for asg in asgs:
+            # TODO: generalize to azure
+            if asg.provider != 'aws':
+                continue
+
+            unmanaged_instance_ids = list(asg.instance_ids - managed_instance_ids)
+            if len(unmanaged_instance_ids) != 0:
+                unmanaged_running_insts = self.get_running_instances_in_region(
+                    asg.region, unmanaged_instance_ids)
+                for inst in unmanaged_running_insts:
+                    if (datetime.datetime.now(inst.launch_time.tzinfo)
+                            - inst.launch_time).seconds >= self.instance_init_time:
+                        if not self.dry_run:
+                            asg.client.terminate_instance_in_auto_scaling_group(
+                                InstanceId=inst.id, ShouldDecrementDesiredCapacity=False)
+                            logger.info("terminating unmanaged %s" % inst)
+                            self.stats.increment(
+                                'kubernetes.custom.node.state.unmanaged',
+                                timestamp=stats_time)
+                            # TODO: try to delete node from kube as well
+                            # in the case where kubelet may have registered but node
+                            # labels have not been applied yet, so it appears unmanaged
+                        else:
+                            logger.info('[Dry run] Would have terminated unmanaged %s', inst)
+
     def fulfill_pending(self, asgs, selectors_hash, pods):
         """
         selectors_hash - string repr of selectors
@@ -461,161 +619,3 @@ class Cluster(object):
                     "Scheduling skipped." % (pod.name, pod.selectors, recommended_capacity))
                 self.notifier.notify_invalid_pod_capacity(pod, recommended_capacity)
         return pods_to_schedule
-
-    def scale(self, pods_to_schedule, all_nodes, asgs, running_insts_map):
-        """
-        scale up logic
-        """
-        # TODO: generalize to azure
-        self.autoscaling_timeouts.refresh_timeouts(
-            [asg for asg in asgs if asg.provider == 'aws'],
-            dry_run=self.dry_run)
-
-        cached_live_nodes = []
-        for node in all_nodes:
-            # either we know the physical node behind it and know it's alive
-            # or we don't know it and assume it's alive
-            if (node.instance_id and node.instance_id in running_insts_map) \
-                    or (not node.is_managed()):
-                cached_live_nodes.append(node)
-
-        # asg name -> pending KubePods
-        pending_pods = {}
-
-        # for each pending & unassigned job, try to fit them on current machines or count requested
-        #   resources towards future machines
-        for selectors_hash, pods in pods_to_schedule.items():
-            for pod in pods:
-                fitting = None
-                for node in cached_live_nodes:
-                    if node.can_fit(pod.resources):
-                        fitting = node
-                        break
-                if fitting is None:
-                    # because a pod may be able to fit in multiple groups
-                    # pick a group now
-                    pending_pods.setdefault(selectors_hash, []).append(pod)
-                    logger.info(
-                        "{pod} is pending ({selectors_hash})".format(
-                            pod=pod, selectors_hash=selectors_hash))
-                else:
-                    fitting.count_pod(pod)
-                    logger.info("{pod} fits on {node}".format(pod=pod,
-                                                              node=fitting))
-
-        # scale each node type to reach the new capacity
-        for selectors_hash, pending in pending_pods.items():
-            self.fulfill_pending(asgs, selectors_hash, pending)
-
-        # TODO: make sure desired capacities of untouched groups are consistent
-
-    def maintain(self, cached_managed_nodes, running_insts_map,
-                 pods_to_schedule, running_or_pending_assigned_pods, asgs):
-        """
-        maintains running instances:
-        - determines if idle nodes should be drained and terminated
-        - determines if there are bad nodes in ASGs (did not spin up under
-          `instance_init_time` seconds)
-        """
-        logger.info("++++++++++++++ Maintaining Managed Nodes ++++++++++++++++")
-
-        # for each type of instance, we keep one around for longer
-        # in order to speed up job start up time
-        idle_selector_hash = collections.Counter()
-
-        pods_by_node = {}
-        for p in running_or_pending_assigned_pods:
-            pods_by_node.setdefault(p.node_name, []).append(p)
-
-        stats_time = time.time()
-
-        for node in cached_managed_nodes:
-            asg = utils.get_group_for_node(asgs, node)
-            state = self.get_node_state(
-                node, asg, pods_by_node.get(node.name, []), pods_to_schedule,
-                running_insts_map, idle_selector_hash)
-
-            logger.info("node: %-*s state: %s" % (75, node, state))
-            self.stats.increment(
-                'kubernetes.custom.node.state.{}'.format(state.replace('-', '_')),
-                timestamp=stats_time)
-
-            # state machine & why doesnt python have case?
-            if state in (ClusterNodeState.POD_PENDING, ClusterNodeState.BUSY,
-                         ClusterNodeState.GRACE_PERIOD,
-                         ClusterNodeState.TYPE_GRACE_PERIOD,
-                         ClusterNodeState.ASG_MIN_SIZE,
-                         ClusterNodeState.LAUNCH_HR_GRACE_PERIOD):
-                # do nothing
-                pass
-            elif state == ClusterNodeState.UNDER_UTILIZED_DRAINABLE:
-                if not self.dry_run:
-                    if not asg:
-                        logger.warn('Cannot find ASG for node %s. Not cordoned.', node)
-                    else:
-                        node.cordon()
-                        node.drain(pods_by_node.get(node.name, []), notifier=self.notifier)
-                else:
-                    logger.info('[Dry run] Would have drained and cordoned %s', node)
-            elif state == ClusterNodeState.IDLE_SCHEDULABLE:
-                if not self.dry_run:
-                    if not asg:
-                        logger.warn('Cannot find ASG for node %s. Not cordoned.', node)
-                    else:
-                        node.cordon()
-                else:
-                    logger.info('[Dry run] Would have cordoned %s', node)
-            elif state == ClusterNodeState.BUSY_UNSCHEDULABLE:
-                # this is duplicated in original scale logic
-                if not self.dry_run:
-                    node.uncordon()
-                else:
-                    logger.info('[Dry run] Would have uncordoned %s', node)
-            elif state == ClusterNodeState.IDLE_UNSCHEDULABLE:
-                # remove it from asg
-                if not self.dry_run:
-                    if not asg:
-                        logger.warn('Cannot find ASG for node %s. Not terminated.', node)
-                    else:
-                        asg.scale_node_in(node)
-                else:
-                    logger.info('[Dry run] Would have scaled in %s', node)
-            elif state == ClusterNodeState.INSTANCE_TERMINATED:
-                if not self.dry_run:
-                    node.delete()
-                else:
-                    logger.info('[Dry run] Would have deleted %s', node)
-            elif state == ClusterNodeState.UNDER_UTILIZED_UNDRAINABLE:
-                # noop for now
-                pass
-            else:
-                raise Exception("Unhandled state: {}".format(state))
-
-        logger.info("++++++++++++++ Maintaining Unmanaged Instances ++++++++++++++++")
-        # these are instances that have been running for a while but it's not properly managed
-        #   i.e. not having registered to kube or not having proper meta data set
-        managed_instance_ids = set(node.instance_id for node in cached_managed_nodes)
-        for asg in asgs:
-            # TODO: generalize to azure
-            if asg.provider != 'aws':
-                continue
-
-            unmanaged_instance_ids = list(asg.instance_ids - managed_instance_ids)
-            if len(unmanaged_instance_ids) != 0:
-                unmanaged_running_insts = self.get_running_instances_in_region(
-                    asg.region, unmanaged_instance_ids)
-                for inst in unmanaged_running_insts:
-                    if (datetime.datetime.now(inst.launch_time.tzinfo)
-                            - inst.launch_time).seconds >= self.instance_init_time:
-                        if not self.dry_run:
-                            asg.client.terminate_instance_in_auto_scaling_group(
-                                InstanceId=inst.id, ShouldDecrementDesiredCapacity=False)
-                            logger.info("terminating unmanaged %s" % inst)
-                            self.stats.increment(
-                                'kubernetes.custom.node.state.unmanaged',
-                                timestamp=stats_time)
-                            # TODO: try to delete node from kube as well
-                            # in the case where kubelet may have registered but node
-                            # labels have not been applied yet, so it appears unmanaged
-                        else:
-                            logger.info('[Dry run] Would have terminated unmanaged %s', inst)
