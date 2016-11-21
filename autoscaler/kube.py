@@ -97,7 +97,7 @@ class KubeNode(object):
         metadata = node.obj['metadata']
         self.name = metadata['name']
         self.instance_id, self.region, self.instance_type, self.provider = self._get_instance_data()
-        self.selectors = metadata['labels']
+        self.selectors = metadata.get('labels', {})
 
         self.capacity = KubeResource(**node.obj['status']['capacity'])
         self.used_capacity = KubeResource()
@@ -108,7 +108,7 @@ class KubeNode(object):
         """
         returns a tuple (instance id, region, instance type)
         """
-        labels = self.original.obj['metadata']['labels']
+        labels = self.original.obj['metadata'].get('labels', {})
         instance_type = labels.get('aws/type', labels.get('beta.kubernetes.io/instance-type'))
 
         provider = self.original.obj['spec'].get('providerID', '')
@@ -157,7 +157,7 @@ class KubeNode(object):
         try:
             self.original.reload()
             self.original.obj['spec']['unschedulable'] = True
-            self.original.obj['metadata']['labels'][_CORDON_LABEL] = 'true'
+            self.original.obj['metadata'].setdefault('labels', {})[_CORDON_LABEL] = 'true'
             self.original.update()
             logger.info("cordoned %s", self)
             return True
