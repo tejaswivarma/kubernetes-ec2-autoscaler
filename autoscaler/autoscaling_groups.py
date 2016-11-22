@@ -239,6 +239,7 @@ class AutoScalingTimeouts(object):
             response = client.cancel_spot_instance_requests(
                 SpotInstanceRequestIds=[request_id]
             )
+            logger.info('Spot instance request %s cancelled.', request_id)
             return True
 
         return False
