@@ -129,6 +129,10 @@ class KubeNode(object):
 
         return (None, '', None, None)
 
+    @property
+    def reservation_id(self):
+        return self.selectors.get('openai.com/reservation-id')
+
     def drain(self, pods, notifier=None):
         for pod in pods:
             if pod.is_drainable():

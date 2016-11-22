@@ -14,6 +14,7 @@ import autoscaler.autoscaling_groups as autoscaling_groups
 import autoscaler.azure as azure
 import autoscaler.capacity as capacity
 from autoscaler.kube import KubePod, KubeNode, KubeResource, KubePodStatus
+import autoscaler.reservations as reservations
 import autoscaler.utils as utils
 
 pykube.Pod.objects.namespace = None  # we are interested in all pods, incl. system ones
@@ -40,6 +41,7 @@ class ClusterNodeState(object):
     UNDER_UTILIZED_DRAINABLE = 'under-utilized-drainable'
     UNDER_UTILIZED_UNDRAINABLE = 'under-utilized-undrainable'
     LAUNCH_HR_GRACE_PERIOD = 'launch-hr-grace-period'
+    RESERVED = 'reserved'
 
 
 class Cluster(object):
@@ -98,6 +100,8 @@ class Cluster(object):
 
         self.azure_groups = azure.AzureGroups(azure_regions)
 
+        self.reservation_client = reservations.ReservationClient()
+
         # config
         self.azure_regions = azure_regions
         self.aws_regions = aws_regions
@@ -150,18 +154,22 @@ class Cluster(object):
 
             pods_to_schedule = self.get_pods_to_schedule(pods)
 
+            res_data = self.reservation_client.list_reservations()
+            reservations_map = dict((r['id'], reservations.Reservation(r, running_insts_map, managed_nodes))
+                                    for r in res_data['reservations'])
+
             if self.scale_up:
                 logger.info("++++++++++++++ Scaling Up Begins ++++++++++++++++")
                 self.scale(
                     pods_to_schedule, all_nodes, scaling_groups,
-                    running_insts_map)
+                    running_insts_map, reservations_map)
                 logger.info("++++++++++++++ Scaling Up Ends ++++++++++++++++")
             if self.maintainance:
                 logger.info("++++++++++++++ Maintenance Begins ++++++++++++++++")
                 self.maintain(
                     managed_nodes, running_insts_map,
                     pods_to_schedule, running_or_pending_assigned_pods,
-                    scaling_groups)
+                    scaling_groups, reservations_map)
                 logger.info("++++++++++++++ Maintenance Ends ++++++++++++++++")
 
             return True
@@ -169,7 +177,8 @@ class Cluster(object):
             logger.warn(e)
             return False
 
-    def scale(self, pods_to_schedule, all_nodes, asgs, running_insts_map):
+    def scale(self, pods_to_schedule, all_nodes, asgs, running_insts_map,
+              reservations_map):
         """
         scale up logic
         """
@@ -214,10 +223,13 @@ class Cluster(object):
         for selectors_hash, pending in pending_pods.items():
             self.fulfill_pending(asgs, selectors_hash, pending)
 
+        self.fulfill_reservations(asgs, reservations_map)
+
         # TODO: make sure desired capacities of untouched groups are consistent
 
     def maintain(self, cached_managed_nodes, running_insts_map,
-                 pods_to_schedule, running_or_pending_assigned_pods, asgs):
+                 pods_to_schedule, running_or_pending_assigned_pods, asgs,
+                 reservations_map):
         """
         maintains running instances:
         - determines if idle nodes should be drained and terminated
@@ -240,7 +252,7 @@ class Cluster(object):
             asg = utils.get_group_for_node(asgs, node)
             state = self.get_node_state(
                 node, asg, pods_by_node.get(node.name, []), pods_to_schedule,
-                running_insts_map, idle_selector_hash)
+                running_insts_map, idle_selector_hash, reservations_map)
 
             logger.info("node: %-*s state: %s" % (75, node, state))
             self.stats.increment(
@@ -303,29 +315,42 @@ class Cluster(object):
         #   i.e. not having registered to kube or not having proper meta data set
         managed_instance_ids = set(node.instance_id for node in cached_managed_nodes)
         for asg in asgs:
-            # TODO: generalize to azure
-            if asg.provider != 'aws':
-                continue
-
-            unmanaged_instance_ids = list(asg.instance_ids - managed_instance_ids)
-            if len(unmanaged_instance_ids) != 0:
-                unmanaged_running_insts = self.get_running_instances_in_region(
-                    asg.region, unmanaged_instance_ids)
-                for inst in unmanaged_running_insts:
-                    if (datetime.datetime.now(inst.launch_time.tzinfo)
-                            - inst.launch_time).seconds >= self.instance_init_time:
-                        if not self.dry_run:
-                            asg.client.terminate_instance_in_auto_scaling_group(
-                                InstanceId=inst.id, ShouldDecrementDesiredCapacity=False)
-                            logger.info("terminating unmanaged %s" % inst)
-                            self.stats.increment(
-                                'kubernetes.custom.node.state.unmanaged',
-                                timestamp=stats_time)
-                            # TODO: try to delete node from kube as well
-                            # in the case where kubelet may have registered but node
-                            # labels have not been applied yet, so it appears unmanaged
-                        else:
-                            logger.info('[Dry run] Would have terminated unmanaged %s', inst)
+            unmanaged_instance_ids = (asg.instance_ids - managed_instance_ids)
+            if len(unmanaged_instance_ids) > 0:
+                if asg.provider == 'azure':
+                    for inst_id in unmanaged_instance_ids:
+                        inst = asg.instances[inst_id]
+                        if (datetime.datetime.now(inst.launch_time.tzinfo)
+                                - inst.launch_time).seconds >= self.instance_init_time:
+                            if not self.dry_run:
+                                logger.info("terminating unmanaged %s" % inst)
+                                asg.terminate_instance(inst_id)
+                                self.stats.increment(
+                                    'kubernetes.custom.node.state.unmanaged',
+                                    timestamp=stats_time)
+                                # TODO: try to delete node from kube as well
+                                # in the case where kubelet may have registered but node
+                                # labels have not been applied yet, so it appears unmanaged
+                            else:
+                                logger.info('[Dry run] Would have terminated unmanaged %s', inst)
+                else:
+                    unmanaged_running_insts = self.get_running_instances_in_region(
+                        asg.region, list(unmanaged_instance_ids))
+                    for inst in unmanaged_running_insts:
+                        if (datetime.datetime.now(inst.launch_time.tzinfo)
+                                - inst.launch_time).seconds >= self.instance_init_time:
+                            if not self.dry_run:
+                                asg.client.terminate_instance_in_auto_scaling_group(
+                                    InstanceId=inst.id, ShouldDecrementDesiredCapacity=False)
+                                logger.info("terminating unmanaged %s" % inst)
+                                self.stats.increment(
+                                    'kubernetes.custom.node.state.unmanaged',
+                                    timestamp=stats_time)
+                                # TODO: try to delete node from kube as well
+                                # in the case where kubelet may have registered but node
+                                # labels have not been applied yet, so it appears unmanaged
+                            else:
+                                logger.info('[Dry run] Would have terminated unmanaged %s', inst)
 
     def fulfill_pending(self, asgs, selectors_hash, pods):
         """
@@ -405,6 +430,49 @@ class Cluster(object):
         if num_unaccounted:
             logger.warn('Failed to scale sufficiently.')
             self.notifier.notify_failed_to_scale(selectors_hash, pods)
+
+    def fulfill_reservations(self, asgs, reservations_map):
+        """
+        selectors_hash - string repr of selectors
+        pods - list of KubePods that are pending
+        """
+        logger.info(
+            "========= Scaling for reservations ========")
+
+        for reservation in reservations_map.values():
+            (pending_resources, num_instances) = reservation.get_pending_resources()
+
+            groups = utils.get_groups_for_hash(asgs, utils.selectors_to_hash(reservation.node_selectors))
+
+            for group in groups:
+                logger.debug("group: %s", group)
+
+                units_needed = self._get_required_capacity(pending_resources, group)
+
+                units_requested = max(units_needed, num_instances)
+
+                logger.debug("units_needed: %s", units_needed)
+                logger.debug("units_requested: %s", units_requested)
+
+                new_capacity = group.actual_capacity + units_requested
+                if not self.dry_run:
+                    reservation_group = group.clone(reservation.tags)
+                    scaled = reservation_group.scale(new_capacity)
+
+                    if scaled:
+                        # self.notifier.notify_scale(group, units_requested, pods)
+                        logger.info('Scaled %s for %s for %s', reservation_group, units_requested, reservation)
+                else:
+                    logger.info('[Dry run] Would have scaled up to %s', new_capacity)
+
+                pending_resources -= units_requested * capacity.get_unit_capacity(group)
+                num_instances -= units_requested
+
+                if not pending_resources.possible and num_instances <= 0:
+                    break
+
+            if pending_resources.possible or num_instances > 0:
+                logger.warn('Failed to scale sufficiently for %s', reservation)
 
     def get_running_instances_in_region(self, region, instance_ids):
         """
@@ -517,7 +585,8 @@ class Cluster(object):
         return sorted(groups, key=sort_key)
 
     def get_node_state(self, node, asg, node_pods, pods_to_schedule,
-                       running_insts_map, idle_selector_hash):
+                       running_insts_map, idle_selector_hash,
+                       reservations_map):
         """
         returns the ClusterNodeState for the given node
 
@@ -558,6 +627,9 @@ class Cluster(object):
 
         if maybe_inst is None:
             state = ClusterNodeState.INSTANCE_TERMINATED
+        elif node.reservation_id in reservations_map:
+            # TODO: add support for scaling down
+            state = ClusterNodeState.RESERVED
         elif asg and len(asg.nodes) <= asg.min_size:
             state = ClusterNodeState.ASG_MIN_SIZE
         elif busy_list and not under_utilized:

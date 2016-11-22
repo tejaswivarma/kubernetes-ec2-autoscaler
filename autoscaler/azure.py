@@ -4,10 +4,13 @@ import urlparse
 from dateutil.parser import parse as dateutil_parse
 import requests
 
+from autoscaler.config import Config
 from autoscaler.autoscaling_groups import AutoScalingGroup
 import autoscaler.utils as utils
 
 logger = logging.getLogger(__name__)
+
+_DEFAULT_TAG_VALUE = 'default'
 
 
 class AzureClient(object):
@@ -15,7 +18,7 @@ class AzureClient(object):
         self.region = region
 
     def _url(self, path):
-        return urlparse.urljoin('http://azure-{}.system/'.format(self.region), path)
+        return urlparse.urljoin('http://azure-{}.{}/'.format(self.region, Config.NAMESPACE), path)
 
     def list_instances(self):
         req = requests.get(self._url('instances'))
@@ -66,8 +69,10 @@ class AzureGroups(object):
                 instance_type = tag_set['instance_type']
                 tags = tag_set['tags']
                 group_instances = [
-                    inst for inst in instances['instances']
+                    AzureInstance(inst) for inst in instances['instances']
                     if inst['instance_type'] == instance_type and all(inst['tags'][k] == tags[k] for k in tags.keys())]
+                for tag in tag_set.get('arbitrary_value_tags', []):
+                    tags[tag] = _DEFAULT_TAG_VALUE
                 group = AzureGroup(client, instance_type, tags, group_instances, kube_nodes)
                 groups.append(group)
 
@@ -95,13 +100,26 @@ class AzureGroup(AutoScalingGroup):
         self.max_size = 1000
         self.is_spot = False
 
-        self.instance_ids = set(inst['id'] for inst in instances)
+        self.instances = dict((inst.id, inst) for inst in instances)
         self.nodes = [node for node in kube_nodes
-                      if node.instance_id in self.instance_ids]
+                      if node.instance_id in self.instances]
         self.unschedulable_nodes = filter(
             lambda n: n.unschedulable, self.nodes)
 
         self._id = (self.region, self.name)
+
+    @property
+    def instance_ids(self):
+        return set(self.instances.keys())
+
+    def clone(self, extra_tags):
+        tags = dict(self.tags)
+        tags.update(extra_tags)
+        group_instances = [
+            inst for inst in self.instances
+            if all(inst.tags[k] == tags[k] for k in tags.keys())]
+        return AzureGroup(self.client, self.instance_type, tags,
+                          group_instances, self.nodes)
 
     def set_desired_capacity(self, new_desired_capacity):
         """
@@ -113,18 +131,22 @@ class AzureGroup(AutoScalingGroup):
             self, new_desired_capacity))
 
         self.client.create_instances(self.instance_type,
-                                     new_desired_capacity - len(self.instance_ids),
+                                     new_desired_capacity - len(self.instances),
                                      self.tags)
         self.desired_capacity = new_desired_capacity
+
+    def terminate_instance(self, instance_id):
+        self.client.delete_instances(instance_id)
+        logger.info('Terminated instance %s', instance_id)
+        return True
 
     def scale_node_in(self, node):
         """
         scale down asg by terminating the given node.
         returns True if node was successfully terminated.
         """
-        self.client.delete_instances(node.instance_id)
+        self.terminate_instance(node.instance_id)
         self.nodes.remove(node)
-        logger.info('Scaled node %s in', node)
         return True
 
     def __str__(self):
@@ -142,3 +164,13 @@ class AzureInstance(object):
         self.instance_type = data['instance_type']
         self.launch_time = dateutil_parse(data['launch_time'])
         self.tags = data['tags']
+
+    @property
+    def reservation_id(self):
+        return self.tags.get('openai.com/reservation-id')
+
+    def __str__(self):
+        return 'AzureInstance({}, {})'.format(self.id, self.instance_type)
+
+    def __repr__(self):
+        return str(self)
