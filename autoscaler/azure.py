@@ -116,7 +116,7 @@ class AzureGroup(AutoScalingGroup):
         tags = dict(self.tags)
         tags.update(extra_tags)
         group_instances = [
-            inst for inst in self.instances
+            inst for inst in self.instances.values()
             if all(inst.tags[k] == tags[k] for k in tags.keys())]
         return AzureGroup(self.client, self.instance_type, tags,
                           group_instances, self.nodes)

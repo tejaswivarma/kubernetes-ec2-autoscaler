@@ -321,7 +321,7 @@ class Cluster(object):
                     for inst_id in unmanaged_instance_ids:
                         inst = asg.instances[inst_id]
                         if (datetime.datetime.now(inst.launch_time.tzinfo)
-                                - inst.launch_time).seconds >= self.instance_init_time:
+                                - inst.launch_time).seconds >= (2.5 * self.instance_init_time):
                             if not self.dry_run:
                                 logger.info("terminating unmanaged %s" % inst)
                                 asg.terminate_instance(inst_id)
@@ -445,18 +445,18 @@ class Cluster(object):
             groups = utils.get_groups_for_hash(asgs, utils.selectors_to_hash(reservation.node_selectors))
 
             for group in groups:
-                logger.debug("group: %s", group)
+                reservation_group = group.clone(reservation.tags)
+                logger.debug("group: %s", reservation_group)
 
-                units_needed = self._get_required_capacity(pending_resources, group)
+                units_needed = self._get_required_capacity(pending_resources, reservation_group)
 
                 units_requested = max(units_needed, num_instances)
 
                 logger.debug("units_needed: %s", units_needed)
                 logger.debug("units_requested: %s", units_requested)
 
-                new_capacity = group.actual_capacity + units_requested
+                new_capacity = reservation_group.actual_capacity + units_requested
                 if not self.dry_run:
-                    reservation_group = group.clone(reservation.tags)
                     scaled = reservation_group.scale(new_capacity)
 
                     if scaled:
