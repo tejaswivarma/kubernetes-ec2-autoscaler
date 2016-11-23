@@ -167,7 +167,7 @@ class AzureInstance(object):
 
     @property
     def reservation_id(self):
-        return self.tags.get('openai.com/reservation-id')
+        return self.tags.get('openai.org/reservation-id')
 
     def __str__(self):
         return 'AzureInstance({}, {})'.format(self.id, self.instance_type)

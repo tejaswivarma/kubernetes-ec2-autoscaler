@@ -43,8 +43,6 @@ class Reservation(object):
         resources.pop('instances', None)
         resources = KubeResource(**resources)
 
-        logger.debug('Reservation %s: resources[%s] instances [%s]', self, resources, num_instances_requested)
-
         return ((resources - fulfilled), num_instances_requested - len(self.nodes))
 
     @property

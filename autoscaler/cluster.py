@@ -264,7 +264,8 @@ class Cluster(object):
                          ClusterNodeState.GRACE_PERIOD,
                          ClusterNodeState.TYPE_GRACE_PERIOD,
                          ClusterNodeState.ASG_MIN_SIZE,
-                         ClusterNodeState.LAUNCH_HR_GRACE_PERIOD):
+                         ClusterNodeState.LAUNCH_HR_GRACE_PERIOD,
+                         ClusterNodeState.RESERVED):
                 # do nothing
                 pass
             elif state == ClusterNodeState.UNDER_UTILIZED_DRAINABLE:
@@ -442,9 +443,18 @@ class Cluster(object):
         for reservation in reservations_map.values():
             (pending_resources, num_instances) = reservation.get_pending_resources()
 
+            if not (pending_resources.possible or num_instances > 0):
+                continue
+
+            logger.debug('pending %s: resources[%s] instances [%s]',
+                         self, pending_resources, num_instances)
+
             groups = utils.get_groups_for_hash(asgs, utils.selectors_to_hash(reservation.node_selectors))
 
             for group in groups:
+                if group.provider != 'azure':
+                    continue
+
                 reservation_group = group.clone(reservation.tags)
                 logger.debug("group: %s", reservation_group)
 
