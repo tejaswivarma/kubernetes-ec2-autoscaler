@@ -101,7 +101,6 @@ class KubeNode(object):
 
         self.capacity = KubeResource(**node.obj['status']['capacity'])
         self.used_capacity = KubeResource()
-        self.unschedulable = node.obj['spec'].get('unschedulable', False)
         self.creation_time = dateutil_parse(metadata['creationTimestamp'])
 
     def _get_instance_data(self):
@@ -132,6 +131,10 @@ class KubeNode(object):
     @property
     def reservation_id(self):
         return self.selectors.get('openai.org/reservation-id')
+
+    @property
+    def unschedulable(self):
+        return self.original.obj['spec'].get('unschedulable', False)
 
     def drain(self, pods, notifier=None):
         for pod in pods:
