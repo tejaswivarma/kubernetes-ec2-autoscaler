@@ -73,7 +73,8 @@ class TestCluster(unittest.TestCase):
         self.cluster = Cluster(
             aws_access_key='',
             aws_secret_key='',
-            regions=['us-west-2', 'us-east-1', 'us-west-1'],
+            aws_regions=['us-west-2', 'us-east-1', 'us-west-1'],
+            azure_regions=[],
             kubeconfig='~/.kube/config',
             idle_threshold=60,
             instance_init_time=60,
@@ -145,7 +146,8 @@ class TestCluster(unittest.TestCase):
         self.cluster.LAUNCH_HOUR_THRESHOLD = -1
         self.cluster.maintain(
             managed_nodes, running_insts_map,
-            pods_to_schedule, running_or_pending_assigned_pods, asgs)
+            pods_to_schedule, running_or_pending_assigned_pods, asgs,
+            {})
 
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -170,7 +172,8 @@ class TestCluster(unittest.TestCase):
         self.cluster.type_idle_threshold = -1
         self.cluster.maintain(
             managed_nodes, running_insts_map,
-            pods_to_schedule, running_or_pending_assigned_pods, asgs)
+            pods_to_schedule, running_or_pending_assigned_pods, asgs,
+            {})
 
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -194,7 +197,8 @@ class TestCluster(unittest.TestCase):
 
         self.cluster.maintain(
             managed_nodes, running_insts_map,
-            pods_to_schedule, running_or_pending_assigned_pods, asgs)
+            pods_to_schedule, running_or_pending_assigned_pods, asgs,
+            {})
 
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -231,12 +235,12 @@ class TestCluster(unittest.TestCase):
         for pods in pod_scenarios:
             state = self.cluster.get_node_state(
                 node, asgs[0], pods, pods_to_schedule,
-                running_insts_map, collections.Counter())
+                running_insts_map, collections.Counter(), {})
             self.assertEqual(state, ClusterNodeState.BUSY)
 
             self.cluster.maintain(
                 managed_nodes, running_insts_map,
-                pods_to_schedule, pods, asgs)
+                pods_to_schedule, pods, asgs, {})
 
             response = self.asg_client.describe_auto_scaling_groups()
             self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -279,12 +283,12 @@ class TestCluster(unittest.TestCase):
         for pods in pod_scenarios:
             state = self.cluster.get_node_state(
                 node, asgs[0], pods, pods_to_schedule,
-                running_insts_map, collections.Counter())
+                running_insts_map, collections.Counter(), {})
             self.assertEqual(state, ClusterNodeState.UNDER_UTILIZED_UNDRAINABLE)
 
             self.cluster.maintain(
                 managed_nodes, running_insts_map,
-                pods_to_schedule, pods, asgs)
+                pods_to_schedule, pods, asgs, {})
 
             response = self.asg_client.describe_auto_scaling_groups()
             self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -316,12 +320,12 @@ class TestCluster(unittest.TestCase):
 
         state = self.cluster.get_node_state(
             node, asgs[0], pods, pods_to_schedule,
-            running_insts_map, collections.Counter())
+            running_insts_map, collections.Counter(), {})
         self.assertEqual(state, ClusterNodeState.UNDER_UTILIZED_DRAINABLE)
 
         self.cluster.maintain(
             managed_nodes, running_insts_map,
-            pods_to_schedule, pods, asgs)
+            pods_to_schedule, pods, asgs, {})
 
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
