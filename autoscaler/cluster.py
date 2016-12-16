@@ -534,7 +534,8 @@ class Cluster(object):
         for region in self.azure_regions:
             client = azure.AzureClient(region)
             instances_data = client.list_instances()
-            instances = [azure.AzureInstance(inst_data) for inst_data in instances_data['instances']]
+            instances = [azure.AzureInstance(inst_data)
+                         for inst_data in instances_data.get('instances', [])]
             instance_map.update((inst.id, inst) for inst in instances)
 
         # now get aws instances
