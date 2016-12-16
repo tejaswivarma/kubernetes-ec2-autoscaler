@@ -24,7 +24,15 @@ class AzureClient(object):
 
     def list_instances(self):
         req = requests.get(self._url('instances'))
-        req.raise_for_status()
+
+        try:
+            req.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            errors.capture_exception()
+            return {
+                'error': str(e)
+            }
+
         return req.json()
 
     def create_instances(self, instance_type, number, tags):
@@ -81,6 +89,10 @@ class AzureGroups(object):
 
             tags = client.get_tags()
             instances = client.list_instances()
+
+            if 'error' in instances:
+                logger.warn('Failed to get instances in %s. Skipping.', region)
+                continue
 
             for tag_set in tags['parameter_sets']:
                 instance_type = tag_set['instance_type']
