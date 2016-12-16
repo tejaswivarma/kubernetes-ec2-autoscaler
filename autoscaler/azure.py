@@ -3,9 +3,11 @@ import urlparse
 
 from dateutil.parser import parse as dateutil_parse
 import requests
+import requests.exceptions
 
 from autoscaler.config import Config
 from autoscaler.autoscaling_groups import AutoScalingGroup
+import autoscaler.errors as errors
 import autoscaler.utils as utils
 
 logger = logging.getLogger(__name__)
@@ -39,12 +41,27 @@ class AzureClient(object):
 
         logger.debug('response: %s', req.text)
 
-        req.raise_for_status()
+        try:
+            req.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            errors.capture_exception()
+            return {
+                'error': str(e)
+            }
+
         return req.json()
 
     def delete_instances(self, instance_id):
         req = requests.delete(self._url('instances/{}'.format(instance_id)))
-        req.raise_for_status()
+
+        try:
+            req.raise_for_status()
+        except requests.exceptions.HTTPError as e:
+            errors.capture_exception()
+            return {
+                'error': str(e)
+            }
+
         return req.json()
 
     def get_tags(self):

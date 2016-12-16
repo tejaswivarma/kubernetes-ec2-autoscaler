@@ -42,11 +42,18 @@ spec:
             secretKeyRef:
               name: autoscaler
               key: datadog-api-key
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: autoscaler
+              key: sentry-dsn
         - name: PYKUBE_KUBERNETES_SERVICE_HOST
           value: 10.100.0.1
           # value: kubernetes.default
         - name: DATADOG_TAGS
           value: env:dev
+        - name: NAMESPACE
+          value: system.svc.sci.openai.org
         command:
             - python
             - main.py
@@ -65,6 +72,6 @@ spec:
             - "30"
         imagePullPolicy: Always
       restartPolicy: Always
-      # dnsPolicy: Default  # Don't use cluster DNS.
+      dnsPolicy: Default  # Don't use cluster DNS.
       nodeSelector:
         aws/region: us-west-2
