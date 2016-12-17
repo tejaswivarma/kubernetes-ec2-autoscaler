@@ -121,6 +121,8 @@ class Cluster(object):
         self.stats = datadog.ThreadStats()
         self.stats.start()
 
+        self._disable_azure = False
+
         self.dry_run = dry_run
 
     def scale_loop(self):
@@ -534,6 +536,7 @@ class Cluster(object):
         for region in self.azure_regions:
             client = azure.AzureClient(region)
             instances_data = client.list_instances()
+            self._disable_azure = 'error' in instances_data
             instances = [azure.AzureInstance(inst_data)
                          for inst_data in instances_data.get('instances', [])]
             instance_map.update((inst.id, inst) for inst in instances)
@@ -636,7 +639,7 @@ class Cluster(object):
         type_spare_capacity = (instance_type and self.type_idle_threshold and
                                idle_selector_hash[instance_type] < self.TYPE_IDLE_COUNT)
 
-        if maybe_inst is None:
+        if maybe_inst is None and not self._disable_azure:
             state = ClusterNodeState.INSTANCE_TERMINATED
         elif node.reservation_id in reservations_map:
             # TODO: add support for scaling down

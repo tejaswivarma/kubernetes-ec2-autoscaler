@@ -11,7 +11,7 @@
         "g2.8xlarge": {"cpu": 16, "memory": 63311153536, "gpu": 4, "pods": 30},
         "c4.2xlarge": {"cpu": 4, "memory": 15770546176, "pods": 30},
         "c4.4xlarge": {"cpu": 8, "memory": 31612444672, "pods": 30},
-        "c4.8xlarge": {"cpu": 18, "memory": 63311120768, "pods": 30},
+        "c4.8xlarge": {"cpu": 16, "memory": 63311120768, "pods": 30},
         "c4.xlarge": {"cpu": 2, "memory": 7843344384, "pods": 30},
         "c4.large": {"cpu": 2, "memory": 3947372544, "pods": 30},
         "p2.xlarge": {"cpu": 2, "memory": 65498251264, "pods": 30},
