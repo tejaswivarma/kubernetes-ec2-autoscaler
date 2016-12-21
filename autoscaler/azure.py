@@ -23,9 +23,8 @@ class AzureClient(object):
         return urlparse.urljoin('http://azure-{}.{}/'.format(self.region, Config.NAMESPACE), path)
 
     def list_instances(self):
-        req = requests.get(self._url('instances'))
-
         try:
+            req = requests.get(self._url('instances'))
             req.raise_for_status()
         except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
             errors.capture_exception()
@@ -45,11 +44,11 @@ class AzureClient(object):
 
         logger.debug('POST %s (data=%s)', url, data)
 
-        req = requests.post(url, json=data)
-
-        logger.debug('response: %s', req.text)
-
         try:
+            req = requests.post(url, json=data)
+
+            logger.debug('response: %s', req.text)
+
             req.raise_for_status()
         except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
             errors.capture_exception()
@@ -60,9 +59,8 @@ class AzureClient(object):
         return req.json()
 
     def delete_instances(self, instance_id):
-        req = requests.delete(self._url('instances/{}'.format(instance_id)))
-
         try:
+            req = requests.delete(self._url('instances/{}'.format(instance_id)))
             req.raise_for_status()
         except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
             errors.capture_exception()
