@@ -71,8 +71,14 @@ class AzureClient(object):
         return req.json()
 
     def get_tags(self):
-        req = requests.get(self._url('allowed_launch_parameters'))
-        req.raise_for_status()
+        try:
+            req = requests.get(self._url('allowed_launch_parameters'))
+            req.raise_for_status()
+        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
+            errors.capture_exception()
+            return {
+                'error': str(e)
+            }
         return req.json()
 
 
@@ -88,7 +94,7 @@ class AzureGroups(object):
             tags = client.get_tags()
             instances = client.list_instances()
 
-            if 'error' in instances:
+            if 'error' in instances or 'error' in tags:
                 logger.warn('Failed to get instances in %s. Skipping.', region)
                 continue
 
