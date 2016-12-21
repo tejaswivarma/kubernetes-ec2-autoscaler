@@ -27,7 +27,7 @@ class AzureClient(object):
 
         try:
             req.raise_for_status()
-        except requests.exceptions.HTTPError as e:
+        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
             errors.capture_exception()
             return {
                 'error': str(e)
@@ -51,7 +51,7 @@ class AzureClient(object):
 
         try:
             req.raise_for_status()
-        except requests.exceptions.HTTPError as e:
+        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
             errors.capture_exception()
             return {
                 'error': str(e)
@@ -64,7 +64,7 @@ class AzureClient(object):
 
         try:
             req.raise_for_status()
-        except requests.exceptions.HTTPError as e:
+        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
             errors.capture_exception()
             return {
                 'error': str(e)
