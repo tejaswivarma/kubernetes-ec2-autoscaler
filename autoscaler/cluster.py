@@ -639,8 +639,11 @@ class Cluster(object):
         type_spare_capacity = (instance_type and self.type_idle_threshold and
                                idle_selector_hash[instance_type] < self.TYPE_IDLE_COUNT)
 
-        if maybe_inst is None and not self._disable_azure:
-            state = ClusterNodeState.INSTANCE_TERMINATED
+        if maybe_inst is None:
+            if not self._disable_azure:
+                state = ClusterNodeState.INSTANCE_TERMINATED
+            else:
+                state = ClusterNodeState.GRACE_PERIOD
         elif node.reservation_id in reservations_map:
             # TODO: add support for scaling down
             state = ClusterNodeState.RESERVED
