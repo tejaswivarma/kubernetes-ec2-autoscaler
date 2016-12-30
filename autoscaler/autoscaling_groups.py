@@ -191,6 +191,17 @@ class AutoScalingTimeouts(object):
                     return
             elif entry['StatusCode'] == 'WaitingForSpotInstanceId':
                 logger.warn('%s waiting for spot: %s', asg, entry)
+
+                balance_cause_m = AutoScalingCauseMessages.AZ_BALANCE.search(entry.get('Cause', ''))
+                if balance_cause_m:
+                    # sometimes ASGs will launch instances in other az's to
+                    # balance out the group
+                    # ignore these events
+                    # even if we cancel it, the ASG will just attempt to
+                    # launch again
+                    logger.info('ignoring AZ balance launch event')
+                    continue
+
                 now = datetime.datetime.now(entry['StartTime'].tzinfo)
                 if (now - entry['StartTime']) > datetime.timedelta(seconds=self._SPOT_REQUEST_TIMEOUT):
                     self._timeouts[asg._id] = entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT)
@@ -483,3 +494,4 @@ class AutoScalingErrorMessages(object):
 
 class AutoScalingCauseMessages(object):
     LAUNCH_INSTANCE = re.compile(r'At \d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ an instance was started in response to a difference between desired and actual capacity, increasing the capacity from (?P<original_capacity>\d+) to (?P<target_capacity>\d+)\.')
+    AZ_BALANCE = re.compile(r'An instance was launched to aid in balancing the group\'s zones\.')
