@@ -56,7 +56,7 @@ spec:
             - python
             - main.py
             - --azure-regions
-            - us-south-central,us-east
+            - us-east,us-south-central
             - --aws-regions
             - us-west-2,us-east-1,us-west-1
             - --cluster-name
