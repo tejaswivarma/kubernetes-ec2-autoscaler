@@ -71,7 +71,7 @@ class Notifier(object):
 
         pods_string = _generate_pod_string(pods)
 
-        message = 'ASG {}[{}] scaled up by {} to new capacity {}'.format(
+        message = 'ASG {}[{}] scaling up by {} to new capacity {}'.format(
             asg.name, asg.region, units_requested, asg.desired_capacity)
         message += '\n'
         message += 'Change triggered by {}'.format(pods_string)
@@ -87,7 +87,7 @@ class Notifier(object):
             logger.critical('Failed to SLACK: %s', e)
 
         self.message_owners(
-            'ASG {}[{}] scaled up'.format(asg.name, asg.region), pods)
+            'ASG {}[{}] scaling up'.format(asg.name, asg.region), pods)
 
     def notify_failed_to_scale(self, selectors_hash, pods):
         struct_log('failed to scale', pods,
@@ -180,7 +180,7 @@ class Notifier(object):
     @cachedmethod(operator.attrgetter('cache'), key=_cache_key)
     def message_owner(self, owner, message, pods):
         attachments = [{
-            'pretext': 'Affected pods',
+            'pretext': 'Relevant pods',
             'text': ', '.join('{}/{}'.format(pod.namespace, pod.name) for pod in pods)
         }]
 
