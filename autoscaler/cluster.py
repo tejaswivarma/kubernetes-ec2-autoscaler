@@ -59,7 +59,7 @@ class Cluster(object):
     # since we pay for the full hour, don't prematurely kill instances
     # the number of minutes into the launch hour at which an instance
     # is fine to kill
-    LAUNCH_HOUR_THRESHOLD = 60 * 50  # 50 minutes
+    LAUNCH_HOUR_THRESHOLD = 60 * 40  # 40 minutes
 
     # HACK: before we're ready to favor bigger instances in all cases
     # just prioritize the ones that we're confident about
