@@ -121,8 +121,6 @@ class Cluster(object):
         self.stats = datadog.ThreadStats()
         self.stats.start()
 
-        self._disable_azure = False
-
         self.dry_run = dry_run
 
     def scale_loop(self):
@@ -139,6 +137,8 @@ class Cluster(object):
 
             all_nodes = map(KubeNode, pykube_nodes)
             managed_nodes = [node for node in all_nodes if node.is_managed()]
+
+            self._disable_azure = False
 
             running_insts_map = self.get_running_instances_map(managed_nodes)
 
@@ -541,7 +541,10 @@ class Cluster(object):
         for region in self.azure_regions:
             client = azure.AzureClient(region)
             instances_data = client.list_instances()
-            self._disable_azure = 'error' in instances_data
+            if 'error' in instances_data:
+                self._disable_azure = True
+                logger.warn('Disabling Azure for loop')
+
             instances = [azure.AzureInstance(inst_data)
                          for inst_data in instances_data.get('instances', [])]
             instance_map.update((inst.id, inst) for inst in instances)
