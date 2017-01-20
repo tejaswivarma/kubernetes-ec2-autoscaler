@@ -130,6 +130,8 @@ class Cluster(object):
         """
         logger.info("++++++++++++++ Running Scaling Loop ++++++++++++++++")
         try:
+            start_time = time.time()
+
             pykube_nodes = pykube.Node.objects(self.api)
             if not pykube_nodes:
                 logger.warn('Failed to list nodes. Please check kube configuration. Terminating scale loop.')
@@ -178,6 +180,8 @@ class Cluster(object):
                     pods_to_schedule, running_or_pending_assigned_pods,
                     scaling_groups, reservations_map)
                 logger.info("++++++++++++++ Maintenance Ends ++++++++++++++++")
+
+            self.stats.gauge('autoscaler.scaling_loop_time', time.time() - start_time)
 
             return True
         except botocore.exceptions.ClientError as e:

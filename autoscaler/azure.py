@@ -1,5 +1,6 @@
 import logging
 import urlparse
+import re
 
 from dateutil.parser import parse as dateutil_parse
 import requests
@@ -103,13 +104,21 @@ class AzureGroups(object):
                 tags = tag_set['tags']
                 group_instances = [
                     AzureInstance(inst) for inst in instances['instances']
-                    if inst['instance_type'] == instance_type and all(inst['tags'][k] == tags[k] for k in tags.keys())]
+                    if inst['instance_type'] == instance_type and all(inst['tags'].get(k) == tags[k] for k in tags.keys())]
                 for tag in tag_set.get('arbitrary_value_tags', []):
                     tags[tag] = _DEFAULT_TAG_VALUE
                 group = AzureGroup(client, instance_type, tags, group_instances, kube_nodes)
                 groups.append(group)
 
         return groups
+
+
+_CLASS_PAT = re.compile(r'\w+_(?P<class>[A-Z]+).+')
+
+
+def _get_azure_class(type_):
+    m = _CLASS_PAT.match(type_)
+    return m.group('class')
 
 
 class AzureGroup(AutoScalingGroup):
@@ -128,6 +137,7 @@ class AzureGroup(AutoScalingGroup):
         # HACK: for matching node selectors
         self.selectors['azure/type'] = self.instance_type
         self.selectors['azure/region'] = self.region
+        self.selectors['azure/class'] = _get_azure_class(self.instance_type)
 
         self.min_size = 0
         self.max_size = 1000
