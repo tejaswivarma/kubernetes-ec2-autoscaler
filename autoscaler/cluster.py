@@ -656,7 +656,7 @@ class Cluster(object):
                 state = ClusterNodeState.INSTANCE_TERMINATED
             else:
                 state = ClusterNodeState.GRACE_PERIOD
-        elif node.reservation_id in reservations_map:
+        elif node.reservation_id in reservations_map and not node.unschedulable:
             # TODO: add support for scaling down
             state = ClusterNodeState.RESERVED
         elif asg and len(asg.nodes) <= asg.min_size:
@@ -670,10 +670,10 @@ class Cluster(object):
             state = ClusterNodeState.POD_PENDING
         elif launch_hour_offset < self.LAUNCH_HOUR_THRESHOLD and not node.unschedulable:
             state = ClusterNodeState.LAUNCH_HR_GRACE_PERIOD
-        elif node.provider == 'azure':
+        # elif node.provider == 'azure':
             # disabling scale down in azure for now while we ramp up
             # TODO: remove once azure is bootstrapped
-            state = ClusterNodeState.GRACE_PERIOD
+            # state = ClusterNodeState.GRACE_PERIOD
         elif (not type_spare_capacity and age <= self.idle_threshold) and not node.unschedulable:
             # there is already an instance of this type sitting idle
             # so we use the regular idle threshold for the grace period
