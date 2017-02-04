@@ -17,12 +17,14 @@ from autoscaler.kube import KubePod, KubeNode, KubeResource, KubePodStatus
 import autoscaler.reservations as reservations
 import autoscaler.utils as utils
 
-pykube.Pod.objects.namespace = None  # we are interested in all pods, incl. system ones
+# we are interested in all pods, incl. system ones
+pykube.Pod.objects.namespace = None
 
 # HACK: https://github.com/kelproject/pykube/issues/29#issuecomment-230026930
 import backports.ssl_match_hostname
 # Monkey-patch match_hostname with backports's match_hostname, allowing for IP addresses
-# XXX: the exception that this might raise is backports.ssl_match_hostname.CertificateError
+# XXX: the exception that this might raise is
+# backports.ssl_match_hostname.CertificateError
 pykube.http.requests.packages.urllib3.connection.match_hostname = backports.ssl_match_hostname.match_hostname
 
 logger = logging.getLogger(__name__)
@@ -82,11 +84,13 @@ class Cluster(object):
         if kubeconfig:
             # for using locally
             logger.debug('Using kubeconfig %s', kubeconfig)
-            self.api = pykube.HTTPClient(pykube.KubeConfig.from_file(kubeconfig))
+            self.api = pykube.HTTPClient(
+                pykube.KubeConfig.from_file(kubeconfig))
         else:
             # for using on kube
             logger.debug('Using kube service account')
-            self.api = pykube.HTTPClient(pykube.KubeConfig.from_service_account())
+            self.api = pykube.HTTPClient(
+                pykube.KubeConfig.from_service_account())
 
         self._drained = {}
         self.session = boto3.session.Session(
@@ -96,7 +100,8 @@ class Cluster(object):
         self.autoscaling_groups = autoscaling_groups.AutoScalingGroups(
             session=self.session, regions=aws_regions,
             cluster_name=cluster_name)
-        self.autoscaling_timeouts = autoscaling_groups.AutoScalingTimeouts(self.session)
+        self.autoscaling_timeouts = autoscaling_groups.AutoScalingTimeouts(
+            self.session)
 
         self.azure_groups = azure.AzureGroups(azure_regions)
 
@@ -168,13 +173,15 @@ class Cluster(object):
                                     for r in res_data['reservations'])
 
             if self.scale_up:
-                logger.info("++++++++++++++ Scaling Up Begins ++++++++++++++++")
+                logger.info(
+                    "++++++++++++++ Scaling Up Begins ++++++++++++++++")
                 self.scale(
                     pods_to_schedule, all_nodes, scaling_groups,
                     running_insts_map, reservations_map)
                 logger.info("++++++++++++++ Scaling Up Ends ++++++++++++++++")
             if self.maintainance:
-                logger.info("++++++++++++++ Maintenance Begins ++++++++++++++++")
+                logger.info(
+                    "++++++++++++++ Maintenance Begins ++++++++++++++++")
                 self.maintain(
                     managed_nodes, running_insts_map,
                     pods_to_schedule, running_or_pending_assigned_pods,
@@ -398,11 +405,13 @@ class Cluster(object):
                         found_fit = True
                         break
                 if not found_fit:
-                    new_instance_resources.append(unit_capacity - pod.resources)
+                    new_instance_resources.append(
+                        unit_capacity - pod.resources)
                     assigned_pods.append([pod])
 
             # new desired # machines = # running nodes + # machines required to fit jobs that don't
-            #   fit on running nodes. This scaling is conservative but won't create starving
+            # fit on running nodes. This scaling is conservative but won't
+            # create starving
             units_needed = len(new_instance_resources)
             units_needed += self.over_provision
 
@@ -427,7 +436,8 @@ class Cluster(object):
                 if scaled:
                     self.notifier.notify_scale(group, units_requested, pods)
             else:
-                logger.info('[Dry run] Would have scaled up to %s', new_capacity)
+                logger.info(
+                    '[Dry run] Would have scaled up to %s', new_capacity)
 
             for i in range(min(len(assigned_pods), units_requested)):
                 for pod in assigned_pods[i]:
@@ -593,6 +603,7 @@ class Cluster(object):
         returns the groups sorted in order of where we should try to schedule
         things first. we currently try to prioritize in the following order:
         - region
+        - single-AZ groups over multi-AZ groups (for faster/cheaper network)
         - whether or not the group launches spot instances (prefer spot)
         - manually set _GROUP_PRIORITIES
         - group name
@@ -606,8 +617,12 @@ class Cluster(object):
                     region = len(self.azure_regions) + self.aws_regions.index(group.region)
                 except ValueError:
                     pass
-            priority = self._GROUP_PRIORITIES.get(group.instance_type, self._GROUP_DEFAULT_PRIORITY)
-            return (region, not group.is_spot, priority, group.name)
+            # Some ASGs are pinned to be in a single AZ. Sort them in front of
+            # multi-ASG groups that won't have this tag set.
+            pinned_to_az = group.selectors.get('aws/az', 'z')
+            priority = self._GROUP_PRIORITIES.get(
+                group.selectors.get('aws/type'), self._GROUP_DEFAULT_PRIORITY)
+            return (region, pinned_to_az, not group.is_spot, priority, group.name)
         return sorted(groups, key=sort_key)
 
     def get_node_state(self, node, asg, node_pods, pods_to_schedule,
@@ -635,7 +650,8 @@ class Cluster(object):
         busy_list = [p for p in node_pods if not p.is_mirrored()]
         undrainable_list = [p for p in node_pods if not p.is_drainable()]
         utilization = sum((p.resources for p in busy_list), KubeResource())
-        under_utilized = (self.UTIL_THRESHOLD * node.capacity - utilization).possible
+        under_utilized = (self.UTIL_THRESHOLD *
+                          node.capacity - utilization).possible
         drainable = not undrainable_list
 
         maybe_inst = running_insts_map.get(node.instance_id)
@@ -646,7 +662,8 @@ class Cluster(object):
         else:
             age = None
 
-        instance_type = utils.selectors_to_hash(asg.selectors) if asg else node.instance_type
+        instance_type = utils.selectors_to_hash(
+            asg.selectors) if asg else node.instance_type
 
         type_spare_capacity = (instance_type and self.type_idle_threshold and
                                idle_selector_hash[instance_type] < self.TYPE_IDLE_COUNT)
@@ -710,17 +727,21 @@ class Cluster(object):
             if p.status == KubePodStatus.PENDING and (not p.node_name)
         ]
 
-        # we only consider a pod to be schedulable if it's pending and unassigned and feasible
+        # we only consider a pod to be schedulable if it's pending and
+        # unassigned and feasible
         pods_to_schedule = {}
         for pod in pending_unassigned_pods:
             if capacity.is_possible(pod):
-                pods_to_schedule.setdefault(utils.selectors_to_hash(pod.selectors), []).append(pod)
+                pods_to_schedule.setdefault(
+                    utils.selectors_to_hash(pod.selectors), []).append(pod)
             else:
-                recommended_capacity = capacity.max_capacity_for_selectors(pod.selectors)
+                recommended_capacity = capacity.max_capacity_for_selectors(
+                    pod.selectors)
                 logger.warn(
                     "Pending pod %s cannot fit %s. "
                     "Please check that requested resource amount is "
                     "consistent with node selectors (recommended max: %s). "
                     "Scheduling skipped." % (pod.name, pod.selectors, recommended_capacity))
-                self.notifier.notify_invalid_pod_capacity(pod, recommended_capacity)
+                self.notifier.notify_invalid_pod_capacity(
+                    pod, recommended_capacity)
         return pods_to_schedule
