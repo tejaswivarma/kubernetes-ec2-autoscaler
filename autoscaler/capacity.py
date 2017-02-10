@@ -52,10 +52,15 @@ def max_capacity_for_selectors(selectors):
     returns the maximum capacity that is possible for the given selectors
     """
     computing = selectors.get(COMPUTING_SELECTOR_KEY, 'false')
-    selector = selectors.get(DEFAULT_TYPE_SELECTOR_KEY)
+    selector = selectors.get(DEFAULT_TYPE_SELECTOR_KEY, '')
     class_ = selectors.get(DEFAULT_CLASS_SELECTOR_KEY)
 
     unit_caps = RESOURCE_SPEC[computing]
+
+    # HACK: we modify our types with -modifier for special groups
+    # e.g. c4.8xlarge-public
+    # our selectors don't have dashes otherwise, so remove the modifier
+    selector, _, _ = selector.partition('-')
 
     # if an instance type was specified
     if selector in unit_caps:
