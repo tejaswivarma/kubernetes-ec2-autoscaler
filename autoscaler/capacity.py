@@ -53,7 +53,7 @@ def max_capacity_for_selectors(selectors):
     """
     computing = selectors.get(COMPUTING_SELECTOR_KEY, 'false')
     selector = selectors.get(DEFAULT_TYPE_SELECTOR_KEY, '')
-    class_ = selectors.get(DEFAULT_CLASS_SELECTOR_KEY)
+    class_ = selectors.get(DEFAULT_CLASS_SELECTOR_KEY, '')
 
     unit_caps = RESOURCE_SPEC[computing]
 
@@ -61,6 +61,7 @@ def max_capacity_for_selectors(selectors):
     # e.g. c4.8xlarge-public
     # our selectors don't have dashes otherwise, so remove the modifier
     selector, _, _ = selector.partition('-')
+    class_, _, _ = class_.partition('-')
 
     # if an instance type was specified
     if selector in unit_caps:
