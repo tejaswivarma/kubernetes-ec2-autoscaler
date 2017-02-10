@@ -28,23 +28,8 @@ def is_possible(pod):
     """
     returns whether the pod is possible under the maximum allowable capacity
     """
-    computing = pod.selectors.get(COMPUTING_SELECTOR_KEY, 'false')
-    selector = pod.selectors.get(DEFAULT_TYPE_SELECTOR_KEY)
-    class_ = pod.selectors.get(DEFAULT_CLASS_SELECTOR_KEY)
-
-    unit_caps = RESOURCE_SPEC[computing]
-
-    # if an instance type was specified
-    if selector in unit_caps:
-        return (unit_caps[selector] - pod.resources).possible
-
-    # if an instance class was specified, see if pod fits in any type in
-    # the class
-    for type_, resource in unit_caps.items():
-        if (not class_ or type_.startswith(class_)) and (resource - pod.resources).possible:
-            return True
-
-    return False
+    max_pod_capacity = max_capacity_for_selectors(pod.selectors)
+    return (max_pod_capacity - pod.resources).possible
 
 
 def max_capacity_for_selectors(selectors):
