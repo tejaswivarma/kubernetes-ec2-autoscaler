@@ -98,6 +98,31 @@ class AutoScalingTimeouts(object):
         for asg in asgs:
             self.reconcile_limits(asg, dry_run=dry_run)
 
+    def revert_capacity(self, asg, entry, dry_run):
+        """
+        try to decrease desired capacity to the original
+        capacity before the capacity increase that caused
+        the ASG activity entry.
+        """
+        cause_m = AutoScalingCauseMessages.LAUNCH_INSTANCE.search(entry.get('Cause', ''))
+        if cause_m:
+            original_capacity = int(cause_m.group('original_capacity'))
+            if asg.desired_capacity > original_capacity:
+                # we tried to go over capacity and failed
+                # now set the desired capacity back to a normal range
+                if not dry_run:
+                    asg.set_desired_capacity(original_capacity)
+                else:
+                    logger.info('[Dry run] Would have set desired capacity to %s', original_capacity)
+                return True
+        return False
+
+    def time_out_asg(self, asg, entry):
+        self._timeouts[asg._id] = (
+            entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT))
+        logger.info('%s is timed out until %s',
+                    asg.name, self._timeouts[asg._id])
+
     def reconcile_limits(self, asg, dry_run=False):
         """
         makes sure the ASG has valid capacity by processing errors
@@ -133,9 +158,7 @@ class AutoScalingTimeouts(object):
                 if m:
                     max_desired_capacity = int(m.group('requested')) - 1
                     if asg.desired_capacity > max_desired_capacity:
-                        self._timeouts[asg._id] = entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT)
-                        logger.info('%s is timed out until %s',
-                                    asg.name, self._timeouts[asg._id])
+                        self.time_out_asg(asg, entry)
 
                         # we tried to go over capacity and failed
                         # now set the desired capacity back to a normal range
@@ -148,28 +171,21 @@ class AutoScalingTimeouts(object):
                 m = AutoScalingErrorMessages.VOLUME_LIMIT.match(status_msg)
                 if m:
                     # TODO: decrease desired capacity
-                    self._timeouts[asg._id] = entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT)
-                    logger.info('%s is timed out until %s',
-                                asg.name, self._timeouts[asg._id])
+                    self.time_out_asg(asg, entry)
                     return
 
                 m = AutoScalingErrorMessages.CAPACITY_LIMIT.match(status_msg)
                 if m:
-                    # try to decrease desired capacity
-                    cause_m = AutoScalingCauseMessages.LAUNCH_INSTANCE.search(entry.get('Cause', ''))
-                    if cause_m:
-                        original_capacity = int(cause_m.group('original_capacity'))
-                        if asg.desired_capacity > original_capacity:
-                            self._timeouts[asg._id] = entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT)
-                            logger.info('%s is timed out until %s',
-                                        asg.name, self._timeouts[asg._id])
+                    reverted = self.revert_capacity(asg, entry, dry_run)
+                    if reverted:
+                        self.time_out_asg(asg, entry)
+                    return
 
-                            # we tried to go over capacity and failed
-                            # now set the desired capacity back to a normal range
-                            if not dry_run:
-                                asg.set_desired_capacity(original_capacity)
-                            else:
-                                logger.info('[Dry run] Would have set desired capacity to %s', original_capacity)
+                m = AutoScalingErrorMessages.AZ_LIMIT.search(status_msg)
+                if m and 'only-az' in asg.name:
+                    reverted = self.revert_capacity(asg, entry, dry_run)
+                    if reverted:
+                        self.time_out_asg(asg, entry)
                     return
 
                 m = AutoScalingErrorMessages.SPOT_REQUEST_CANCELLED.search(status_msg)
@@ -180,9 +196,7 @@ class AutoScalingTimeouts(object):
 
                 m = AutoScalingErrorMessages.SPOT_LIMIT.match(status_msg)
                 if m:
-                    self._timeouts[asg._id] = entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT)
-                    logger.info('%s is timed out until %s',
-                                asg.name, self._timeouts[asg._id])
+                    self.time_out_asg(asg, entry)
 
                     if not dry_run:
                         asg.set_desired_capacity(asg.actual_capacity)
@@ -204,9 +218,7 @@ class AutoScalingTimeouts(object):
 
                 now = datetime.datetime.now(entry['StartTime'].tzinfo)
                 if (now - entry['StartTime']) > datetime.timedelta(seconds=self._SPOT_REQUEST_TIMEOUT):
-                    self._timeouts[asg._id] = entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT)
-                    logger.info('%s is timed out until %s',
-                                asg.name, self._timeouts[asg._id])
+                    self.time_out_asg(asg, entry)
 
                     # try to cancel spot request and scale down ASG
                     spot_request_m = AutoScalingErrorMessages.SPOT_REQUEST_WAITING.search(status_msg)
@@ -490,6 +502,7 @@ class AutoScalingErrorMessages(object):
     SPOT_REQUEST_WAITING = re.compile(r'Placed Spot instance request: (?P<request_id>.+). Waiting for instance\(s\)')
     SPOT_REQUEST_CANCELLED = re.compile(r'Spot instance request: (?P<request_id>.+) has been cancelled\.')
     SPOT_LIMIT = re.compile(r'Max spot instance count exceeded\. Placing Spot instance request failed\.')
+    AZ_LIMIT = re.compile(r'We currently do not have sufficient .+ capacity in the Availability Zone you requested (.+)\.')
 
 
 class AutoScalingCauseMessages(object):
