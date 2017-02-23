@@ -19,8 +19,8 @@ with open(Config.CAPACITY_DATA, 'r') as f:
             resource = KubeResource(**resource_spec)
             RESOURCE_SPEC[key][instance_type] = resource
 
-DEFAULT_TYPE_SELECTOR_KEY = 'aws/type'
-DEFAULT_CLASS_SELECTOR_KEY = 'aws/class'
+DEFAULT_TYPE_SELECTOR_KEYS = ('aws/type', 'azure/type')
+DEFAULT_CLASS_SELECTOR_KEYS = ('aws/class', 'azure/class')
 COMPUTING_SELECTOR_KEY = 'openai/computing'
 
 
@@ -37,8 +37,16 @@ def max_capacity_for_selectors(selectors):
     returns the maximum capacity that is possible for the given selectors
     """
     computing = selectors.get(COMPUTING_SELECTOR_KEY, 'false')
-    selector = selectors.get(DEFAULT_TYPE_SELECTOR_KEY, '')
-    class_ = selectors.get(DEFAULT_CLASS_SELECTOR_KEY, '')
+    selector = ''
+    for key in DEFAULT_TYPE_SELECTOR_KEYS:
+        if key in selectors:
+            selector = selectors[key]
+            break
+    class_ = ''
+    for key in DEFAULT_CLASS_SELECTOR_KEYS:
+        if key in selectors:
+            class_ = selectors[key]
+            break
 
     unit_caps = RESOURCE_SPEC[computing]
 
