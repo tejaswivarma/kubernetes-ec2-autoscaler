@@ -62,7 +62,8 @@ def max_capacity_for_selectors(selectors):
 
     max_capacity = None
     for type_, resource in unit_caps.items():
-        if (not class_ or type_.startswith(class_)):
+        if (not class_ or type_.startswith(class_) or
+                type_.startswith('Standard_{}'.format(class_))):
             if not max_capacity or (resource - max_capacity).possible:
                 max_capacity = resource
 
