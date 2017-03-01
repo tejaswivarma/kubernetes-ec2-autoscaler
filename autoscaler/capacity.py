@@ -29,6 +29,8 @@ def is_possible(pod):
     returns whether the pod is possible under the maximum allowable capacity
     """
     max_pod_capacity = max_capacity_for_selectors(pod.selectors)
+    if not max_pod_capacity:
+        return False
     return (max_pod_capacity - pod.resources).possible
 
 
@@ -55,6 +57,7 @@ def max_capacity_for_selectors(selectors):
     # our selectors don't have dashes otherwise, so remove the modifier
     selector, _, _ = selector.partition('-')
     class_, _, _ = class_.partition('-')
+    azure_class = 'Standard_{}'.format(class_)
 
     # if an instance type was specified
     if selector in unit_caps:
@@ -63,11 +66,11 @@ def max_capacity_for_selectors(selectors):
     max_capacity = None
     for type_, resource in unit_caps.items():
         if (not class_ or type_.startswith(class_) or
-                type_.startswith('Standard_{}'.format(class_))):
+                type_.startswith(azure_class)):
             if not max_capacity or (resource - max_capacity).possible:
                 max_capacity = resource
 
-    return resource
+    return max_capacity
 
 
 def get_unit_capacity(group):
