@@ -205,6 +205,9 @@ class KubeNode(object):
         """
         return self.instance_id is not None
 
+    def is_detached(self):
+        return utils.parse_bool_label(self.selectors.get('openai/detached'))
+
     def __hash__(self):
         return hash(self.name)
 

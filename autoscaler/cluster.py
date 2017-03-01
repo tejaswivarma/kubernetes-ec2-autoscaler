@@ -44,6 +44,7 @@ class ClusterNodeState(object):
     UNDER_UTILIZED_UNDRAINABLE = 'under-utilized-undrainable'
     LAUNCH_HR_GRACE_PERIOD = 'launch-hr-grace-period'
     RESERVED = 'reserved'
+    DETACHED = 'detached'
 
 
 class Cluster(object):
@@ -283,7 +284,8 @@ class Cluster(object):
                          ClusterNodeState.TYPE_GRACE_PERIOD,
                          ClusterNodeState.ASG_MIN_SIZE,
                          ClusterNodeState.LAUNCH_HR_GRACE_PERIOD,
-                         ClusterNodeState.RESERVED):
+                         ClusterNodeState.RESERVED,
+                         ClusterNodeState.DETACHED):
                 # do nothing
                 pass
             elif state == ClusterNodeState.UNDER_UTILIZED_DRAINABLE:
@@ -673,6 +675,8 @@ class Cluster(object):
                 state = ClusterNodeState.INSTANCE_TERMINATED
             else:
                 state = ClusterNodeState.GRACE_PERIOD
+        elif node.is_detached():
+            state = ClusterNodeState.DETACHED
         elif node.reservation_id in reservations_map and not node.unschedulable:
             # TODO: add support for scaling down
             state = ClusterNodeState.RESERVED
