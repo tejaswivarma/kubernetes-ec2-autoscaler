@@ -104,7 +104,8 @@ class AzureGroups(object):
                 tags = tag_set['tags']
                 group_instances = [
                     AzureInstance(inst) for inst in instances['instances']
-                    if inst['instance_type'] == instance_type and all(inst['tags'].get(k) == tags[k] for k in tags.keys())]
+                    if inst['instance_type'] == instance_type and
+                    all(inst['tags'].get(k) == tags[k] for k in tags.keys())]
                 for tag in tag_set.get('arbitrary_value_tags', []):
                     tags[tag] = _DEFAULT_TAG_VALUE
                 group = AzureGroup(client, instance_type, tags, group_instances, kube_nodes)

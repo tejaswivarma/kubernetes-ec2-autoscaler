@@ -32,16 +32,21 @@ class Reservation(object):
         self.instance_ids = set(inst_id for inst_id, inst in instances.items()
                                 if getattr(inst, 'reservation_id', None) == self.id)
         self.nodes = [node for node in kube_nodes
-                      if node.instance_id in self.instance_ids]
+                      if node.instance_id in self.instance_ids and
+                      self._is_match(node)]
 
     def get_pending_resources(self):
-        fulfilled = sum((node.capacity for node in self.nodes), KubeResource())
+        schedulable_nodes = [node for node in self.nodes
+                             if not node.unschedulable]
+        fulfilled = sum(
+            (node.capacity for node in schedulable_nodes),
+            KubeResource())
 
         return (self.kube_resources_requested - fulfilled,
-                self.num_instances_requested - len(self.nodes))
+                self.num_instances_requested - len(schedulable_nodes))
 
     @property
-    def num_instance_requested(self):
+    def num_instances_requested(self):
         return self.resources.get('instances', 0)
 
     @property
@@ -56,6 +61,10 @@ class Reservation(object):
         return {
             'openai.org/reservation-id': self.id
         }
+
+    def _is_match(self, node):
+        return all(node.selectors.get(k) == self.node_selectors[k]
+                   for k in self.node_selectors.keys())
 
     def __str__(self):
         return 'Reservation({}, {})'.format(self.id, self.node_selectors)

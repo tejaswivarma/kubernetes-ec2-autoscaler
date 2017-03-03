@@ -474,7 +474,7 @@ class Cluster(object):
                 continue
 
             logger.debug('pending %s: resources[%s] instances [%s]',
-                         self, pending_resources, num_instances)
+                         reservation, pending_resources, num_instances)
 
             groups = utils.get_groups_for_hash(asgs, utils.selectors_to_hash(reservation.node_selectors))
 
@@ -697,7 +697,7 @@ class Cluster(object):
                 reservation_resources.get(reservation.id, (KubeResource(), 0)))
 
             if not ((fulfilled_resources - reservation.kube_resources_requested).possible
-                    and fulfilled_instances >= reservation.num_instance_requested):
+                    and fulfilled_instances >= reservation.num_instances_requested):
                 fulfilled_resources += node.capacity
                 fulfilled_instances += 1
                 reservation_resources[reservation.id] = (fulfilled_resources, fulfilled_instances)
