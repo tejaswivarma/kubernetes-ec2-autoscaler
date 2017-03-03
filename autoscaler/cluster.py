@@ -261,6 +261,9 @@ class Cluster(object):
         # in order to speed up job start up time
         idle_selector_hash = collections.Counter()
 
+        # keep track of how much resources each reservation has
+        reservation_resources = dict()
+
         pods_by_node = {}
         for p in running_or_pending_assigned_pods:
             pods_by_node.setdefault(p.node_name, []).append(p)
@@ -271,7 +274,8 @@ class Cluster(object):
             asg = utils.get_group_for_node(asgs, node)
             state = self.get_node_state(
                 node, asg, pods_by_node.get(node.name, []), pods_to_schedule,
-                running_insts_map, idle_selector_hash, reservations_map)
+                running_insts_map, idle_selector_hash, reservations_map,
+                reservation_resources)
 
             logger.info("node: %-*s state: %s" % (75, node, state))
             self.stats.increment(
@@ -629,7 +633,7 @@ class Cluster(object):
 
     def get_node_state(self, node, asg, node_pods, pods_to_schedule,
                        running_insts_map, idle_selector_hash,
-                       reservations_map):
+                       reservations_map, reservation_resources):
         """
         returns the ClusterNodeState for the given node
 
@@ -639,7 +643,9 @@ class Cluster(object):
         node_pods - list of KubePods assigned to this node
         pods_to_schedule - list of all pending pods
         running_inst_map - map of all (instance_id -> ec2.Instance object)
-        idle_selector_hash - current map of idle nodes by type. may be modified.
+        idle_selector_hash - current map of idle nodes by type. may be modified
+        reservations_map - map of all (reservation_id -> Reservation object)
+        reservation_resources - map of all (reservation_id -> (KubeResource, num instances))
         """
         pending_list = []
         for pods in pods_to_schedule.values():
@@ -672,54 +678,75 @@ class Cluster(object):
 
         if maybe_inst is None:
             if not self._disable_azure:
-                state = ClusterNodeState.INSTANCE_TERMINATED
-            else:
-                state = ClusterNodeState.GRACE_PERIOD
-        elif node.is_detached():
-            state = ClusterNodeState.DETACHED
-        elif node.reservation_id in reservations_map and not node.unschedulable:
-            # TODO: add support for scaling down
-            state = ClusterNodeState.RESERVED
-        elif asg and len(asg.nodes) <= asg.min_size:
-            state = ClusterNodeState.ASG_MIN_SIZE
-        elif busy_list and not under_utilized:
+                return ClusterNodeState.INSTANCE_TERMINATED
+
+            # if we have disabled azure (because of maintenance etc.)
+            # let's not spin down any nodes just yet
+            return ClusterNodeState.GRACE_PERIOD
+
+        if node.is_detached():
+            return ClusterNodeState.DETACHED
+
+        if node.reservation_id in reservations_map and not node.unschedulable:
+            # this node is in a reservation
+            # let's see if the reservation needs its resources
+            # so we can scale down appropriately if the reservation
+            # has been downsized
+            reservation = reservations_map[node.reservation_id]
+            (fulfilled_resources, fulfilled_instances) = (
+                reservation_resources.get(reservation.id, (KubeResource(), 0)))
+
+            if not ((fulfilled_resources - reservation.kube_resources_requested).possible
+                    and fulfilled_instances >= reservation.num_instance_requested):
+                fulfilled_resources += node.capacity
+                fulfilled_instances += 1
+                reservation_resources[reservation.id] = (fulfilled_resources, fulfilled_instances)
+                return ClusterNodeState.RESERVED
+
+            logger.warn('reserved extra node!!! %s %s', fulfilled_resources, fulfilled_instances)
+
+        if asg and len(asg.nodes) <= asg.min_size:
+            return ClusterNodeState.ASG_MIN_SIZE
+
+        if busy_list and not under_utilized:
             if node.unschedulable:
-                state = ClusterNodeState.BUSY_UNSCHEDULABLE
-            else:
-                state = ClusterNodeState.BUSY
-        elif pending_list and not node.unschedulable:
-            state = ClusterNodeState.POD_PENDING
-        elif launch_hour_offset < self.LAUNCH_HOUR_THRESHOLD and not node.unschedulable:
-            state = ClusterNodeState.LAUNCH_HR_GRACE_PERIOD
+                return ClusterNodeState.BUSY_UNSCHEDULABLE
+            return ClusterNodeState.BUSY
+
+        if pending_list and not node.unschedulable:
+            return ClusterNodeState.POD_PENDING
+
+        if launch_hour_offset < self.LAUNCH_HOUR_THRESHOLD and not node.unschedulable:
+            return ClusterNodeState.LAUNCH_HR_GRACE_PERIOD
+
         # elif node.provider == 'azure':
             # disabling scale down in azure for now while we ramp up
             # TODO: remove once azure is bootstrapped
             # state = ClusterNodeState.GRACE_PERIOD
-        elif (not type_spare_capacity and age <= self.idle_threshold) and not node.unschedulable:
+
+        if (not type_spare_capacity and age <= self.idle_threshold) and not node.unschedulable:
             # there is already an instance of this type sitting idle
             # so we use the regular idle threshold for the grace period
-            state = ClusterNodeState.GRACE_PERIOD
-        elif (type_spare_capacity and age <= self.type_idle_threshold) and not node.unschedulable:
+            return ClusterNodeState.GRACE_PERIOD
+
+        if (type_spare_capacity and age <= self.type_idle_threshold) and not node.unschedulable:
             # we don't have an instance of this type yet!
             # use the type idle threshold for the grace period
             # and mark the type as seen
             idle_selector_hash[instance_type] += 1
-            state = ClusterNodeState.TYPE_GRACE_PERIOD
-        elif under_utilized and (busy_list or not node.unschedulable):
+            return ClusterNodeState.TYPE_GRACE_PERIOD
+
+        if under_utilized and (busy_list or not node.unschedulable):
             # nodes that are under utilized (but not completely idle)
             # have their own states to tell if we should drain them
             # for better binpacking or not
             if drainable:
-                state = ClusterNodeState.UNDER_UTILIZED_DRAINABLE
-            else:
-                state = ClusterNodeState.UNDER_UTILIZED_UNDRAINABLE
-        else:
-            if node.unschedulable:
-                state = ClusterNodeState.IDLE_UNSCHEDULABLE
-            else:
-                state = ClusterNodeState.IDLE_SCHEDULABLE
+                return ClusterNodeState.UNDER_UTILIZED_DRAINABLE
+            return ClusterNodeState.UNDER_UTILIZED_UNDRAINABLE
 
-        return state
+        if node.unschedulable:
+            return ClusterNodeState.IDLE_UNSCHEDULABLE
+        return ClusterNodeState.IDLE_SCHEDULABLE
 
     def get_pods_to_schedule(self, pods):
         """

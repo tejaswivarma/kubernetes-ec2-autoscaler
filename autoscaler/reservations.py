@@ -37,13 +37,19 @@ class Reservation(object):
     def get_pending_resources(self):
         fulfilled = sum((node.capacity for node in self.nodes), KubeResource())
 
-        num_instances_requested = self.resources.get('instances', 0)
+        return (self.kube_resources_requested - fulfilled,
+                self.num_instances_requested - len(self.nodes))
 
+    @property
+    def num_instance_requested(self):
+        return self.resources.get('instances', 0)
+
+    @property
+    def kube_resources_requested(self):
         resources = dict(self.resources)
         resources.pop('instances', None)
         resources = KubeResource(**resources)
-
-        return ((resources - fulfilled), num_instances_requested - len(self.nodes))
+        return resources
 
     @property
     def tags(self):
