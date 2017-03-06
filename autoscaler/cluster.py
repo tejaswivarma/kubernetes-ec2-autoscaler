@@ -375,7 +375,8 @@ class Cluster(object):
                                 # in the case where kubelet may have registered but node
                                 # labels have not been applied yet, so it appears unmanaged
                             else:
-                                logger.info('[Dry run] Would have terminated unmanaged %s', inst)
+                                logger.info(
+                                    '[Dry run] Would have terminated unmanaged %s [%s]', inst, asg.region)
 
     def fulfill_pending(self, asgs, selectors_hash, pods):
         """
