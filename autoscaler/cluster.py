@@ -516,6 +516,10 @@ class Cluster(object):
         a generator for getting ec2.Instance objects given a list of
         instance IDs.
         """
+        if not region:
+            logger.warn('Instance IDs without region: %s', instance_ids)
+            return
+
         yielded_ids = set()
         try:
             running_insts = (self.session
