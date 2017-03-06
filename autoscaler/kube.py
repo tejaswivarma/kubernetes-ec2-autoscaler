@@ -113,7 +113,8 @@ class KubeNode(object):
         provider = self.original.obj['spec'].get('providerID', '')
         if provider.startswith('aws://'):
             az, instance_id = tuple(provider.split('/')[-2:])
-            return (instance_id, az[:-1], instance_type, 'aws')
+            if az and instance_id:
+                return (instance_id, az[:-1], instance_type, 'aws')
 
         if labels.get('aws/id') and labels.get('aws/az'):
             instance_id = labels['aws/id']
