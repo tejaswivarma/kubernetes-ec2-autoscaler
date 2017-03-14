@@ -138,6 +138,7 @@ class Cluster(object):
         try:
             start_time = time.time()
 
+            kube_lookup_start_time = time.time()
             pykube_nodes = pykube.Node.objects(self.api)
             if not pykube_nodes:
                 logger.warn('Failed to list nodes. Please check kube configuration. Terminating scale loop.')
@@ -162,10 +163,13 @@ class Cluster(object):
                 for pod in running_or_pending_assigned_pods:
                     if pod.node_name == node.name:
                         node.count_pod(pod)
+            self.stats.gauge('autoscaler.scaling_loop.kube_lookup_time', time.time() - kube_lookup_start_time)
 
+            scaling_group_lookup_start_time = time.time()
             asgs = self.autoscaling_groups.get_all_groups(all_nodes)
             azure_groups = self.azure_groups.get_all_groups(all_nodes)
             scaling_groups = asgs + azure_groups
+            self.stats.gauge('autoscaler.scaling_loop.scaling_group_lookup_time', time.time() - scaling_group_lookup_start_time)
 
             pods_to_schedule = self.get_pods_to_schedule(pods)
 
