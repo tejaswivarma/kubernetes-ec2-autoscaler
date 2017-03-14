@@ -95,8 +95,47 @@ class AutoScalingTimeouts(object):
         refresh timeouts on ASGs using new data from aws
         """
         self.time_out_spot_asgs(asgs)
+
+        asgs_by_region = {}
         for asg in asgs:
-            self.reconcile_limits(asg, dry_run=dry_run)
+            asgs_by_region.setdefault(asg.region, []).append(asg)
+
+        for region, regional_asgs in asgs_by_region.items():
+            client = self.session.client('autoscaling', region_name=region)
+            start_time_cutoff = None
+            newest_completed_activity = None
+            activities = {}
+            for activity in self.iter_activities(client):
+                if newest_completed_activity is None and activity['Progress'] == 100:
+                    newest_completed_activity = activity
+                if activity['ActivityId'] == self._last_activities.get(region, None):
+                    break
+                if start_time_cutoff is None:
+                    start_time_cutoff = (
+                        datetime.datetime.now(activity['StartTime'].tzinfo) -
+                        datetime.timedelta(seconds=self._TIMEOUT))
+                if activity['StartTime'] < start_time_cutoff:
+                    # skip events that are too old to cut down the time
+                    # it takes the first time to go through events
+                    break
+                activities.setdefault(activity['AutoScalingGroupName'], []).append(activity)
+
+            self._last_activities[region] = newest_completed_activity['ActivityId']
+            for asg in regional_asgs:
+                self.reconcile_limits(asg, activities.get(asg.name, []), dry_run=dry_run)
+
+    def iter_activities(self, client):
+        next_token = None
+        while True:
+            kwargs = {}
+            if next_token:
+                kwargs['NextToken'] = next_token
+            data = client.describe_scaling_activities(**kwargs)
+            for item in data['Activities']:
+                yield item
+            next_token = data.get('NextToken')
+            if not next_token:
+                break
 
     def revert_capacity(self, asg, entry, dry_run):
         """
@@ -123,33 +162,14 @@ class AutoScalingTimeouts(object):
         logger.info('%s is timed out until %s',
                     asg.name, self._timeouts[asg._id])
 
-    def reconcile_limits(self, asg, dry_run=False):
+    def reconcile_limits(self, asg, activities, dry_run=False):
         """
         makes sure the ASG has valid capacity by processing errors
         in its recent scaling activities.
         marks an ASG as timed out if it recently had a capacity
         failure.
         """
-        start_time_cutoff = None
-        for entry in asg.iter_activities():
-            if entry['ActivityId'] == self._last_activities.get(asg._id):
-                # already processed the rest
-                return
-            if start_time_cutoff is None:
-                # won't process this activity twice
-                self._last_activities[asg._id] = entry['ActivityId']
-                start_time_cutoff = (
-                    datetime.datetime.now(entry['StartTime'].tzinfo) -
-                    datetime.timedelta(seconds=self._TIMEOUT))
-            if entry['StartTime'] < start_time_cutoff:
-                # skip events that are too old to cut down the time
-                # it takes the first time to go through events
-                break
-
-            # events that have partial progress are not considered processed
-            if entry['Progress'] < 100:
-                start_time_cutoff = None
-
+        for entry in activities:
             status_msg = entry.get('StatusMessage', '')
             if entry['StatusCode'] in ('Failed', 'Cancelled'):
                 logger.warn('%s scaling failure: %s', asg, entry)
@@ -462,22 +482,6 @@ class AutoScalingGroup(object):
             return False
 
         return True
-
-    def iter_activities(self):
-        next_token = None
-        while True:
-            kwargs = {
-                'AutoScalingGroupName': self.name,
-                'MaxRecords': 10
-            }
-            if next_token:
-                kwargs['NextToken'] = next_token
-            data = self.client.describe_scaling_activities(**kwargs)
-            for item in data['Activities']:
-                yield item
-            next_token = data.get('NextToken')
-            if not next_token:
-                break
 
     def contains(self, node):
         return node.instance_id in self.instance_ids
