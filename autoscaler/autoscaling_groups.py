@@ -3,6 +3,7 @@ import logging
 import re
 
 import botocore
+import pytz
 
 import autoscaler.aws_utils as aws_utils
 import autoscaler.utils as utils
@@ -89,6 +90,7 @@ class AutoScalingTimeouts(object):
 
         # ASGs to avoid because of spot pricing history
         self._spot_timeouts = {}
+        self._spot_price_history = {}
 
     def refresh_timeouts(self, asgs, dry_run=False):
         """
@@ -263,7 +265,7 @@ class AutoScalingTimeouts(object):
         if timeout and datetime.datetime.now(timeout.tzinfo) < timeout:
             return True
 
-        if spot_timeout and datetime.datetime.utcnow() < spot_timeout:
+        if spot_timeout and datetime.datetime.now(pytz.utc) < spot_timeout:
             return True
 
         return False
@@ -301,18 +303,25 @@ class AutoScalingTimeouts(object):
             instance_type = asg.launch_config['InstanceType']
             instance_asg_map.setdefault(instance_type, []).append(asg)
 
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(pytz.utc)
         since = now - datetime.timedelta(seconds=self._SPOT_HISTORY_PERIOD)
 
         for region, instance_asg_map in region_instance_asg_map.items():
+            # Expire old history
+            history = [item for item in self._spot_price_history.get(region, []) if item['Timestamp'] > since]
+            if history:
+                newest_spot_price = max(item['Timestamp'] for item in history)
+            else:
+                newest_spot_price = since
             client = self.session.client('ec2', region_name=region)
             kwargs = {
-                'StartTime': since,
+                'StartTime': newest_spot_price,
                 'InstanceTypes': instance_asg_map.keys(),
                 'ProductDescriptions': ['Linux/UNIX']
             }
-            history = aws_utils.fetch_all(
-                client.describe_spot_price_history, kwargs, 'SpotPriceHistory')
+            history.extend(aws_utils.fetch_all(
+                client.describe_spot_price_history, kwargs, 'SpotPriceHistory'))
+            self._spot_price_history[region] = history
             for instance_type, asgs in instance_asg_map.items():
                 for asg in asgs:
                     last_az_bid = {}
