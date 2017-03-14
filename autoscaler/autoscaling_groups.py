@@ -48,7 +48,7 @@ class AutoScalingGroups(object):
             client = self.session.client(self._BOTO_CLIENT_TYPE,
                                          region_name=region)
             raw_groups = aws_utils.fetch_all(
-                client.describe_auto_scaling_groups, {}, 'AutoScalingGroups')
+                client.describe_auto_scaling_groups, {'MaxRecords': 100}, 'AutoScalingGroups')
 
             launch_configs = self.get_all_launch_configs(client, raw_groups)
 
