@@ -1,6 +1,7 @@
 import datetime
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 import botocore
 import pytz
@@ -27,7 +28,10 @@ class AutoScalingGroups(object):
         self.regions = regions
         self.cluster_name = cluster_name
 
-    def get_all_launch_configs(self, client, raw_groups):
+    @staticmethod
+    def get_all_raw_groups_and_launch_configs(client):
+        raw_groups = aws_utils.fetch_all(
+            client.describe_auto_scaling_groups, {'MaxRecords': 100}, 'AutoScalingGroups')
         all_launch_configs = {}
         batch_size = 50
         for launch_config_idx in range(0, len(raw_groups), batch_size):
@@ -40,33 +44,38 @@ class AutoScalingGroups(object):
                 kwargs, 'LaunchConfigurations')
             all_launch_configs.update((lc['LaunchConfigurationName'], lc)
                                       for lc in launch_configs)
-        return all_launch_configs
+        return raw_groups, all_launch_configs
 
     def get_all_groups(self, kube_nodes):
         groups = []
-        for region in self.regions:
-            client = self.session.client(self._BOTO_CLIENT_TYPE,
-                                         region_name=region)
-            raw_groups = aws_utils.fetch_all(
-                client.describe_auto_scaling_groups, {'MaxRecords': 100}, 'AutoScalingGroups')
+        with ThreadPoolExecutor(max_workers=len(self.regions)) as executor:
+            raw_groups_and_launch_configs = {}
+            for region in self.regions:
+                client = self.session.client(self._BOTO_CLIENT_TYPE,
+                                             region_name=region)
+                raw_groups_and_launch_configs[region] = executor.submit(
+                    AutoScalingGroups.get_all_raw_groups_and_launch_configs, client)
 
-            launch_configs = self.get_all_launch_configs(client, raw_groups)
+            for region in self.regions:
+                raw_groups, launch_configs = raw_groups_and_launch_configs[region].result()
 
-            for raw_group in sorted(raw_groups, key=lambda g: g['AutoScalingGroupName']):
-                if self.cluster_name:
-                    cluster_name = None
-                    role = None
-                    for tag in raw_group['Tags']:
-                        if tag['Key'] == self._CLUSTER_KEY:
-                            cluster_name = tag['Value']
-                        elif tag['Key'] in self._ROLE_KEYS:
-                            role = tag['Value']
-                    if cluster_name != self.cluster_name or role not in self._WORKER_ROLE_VALUES:
-                        continue
+                client = self.session.client(self._BOTO_CLIENT_TYPE,
+                                             region_name=region)
+                for raw_group in sorted(raw_groups, key=lambda g: g['AutoScalingGroupName']):
+                    if self.cluster_name:
+                        cluster_name = None
+                        role = None
+                        for tag in raw_group['Tags']:
+                            if tag['Key'] == self._CLUSTER_KEY:
+                                cluster_name = tag['Value']
+                            elif tag['Key'] in self._ROLE_KEYS:
+                                role = tag['Value']
+                        if cluster_name != self.cluster_name or role not in self._WORKER_ROLE_VALUES:
+                            continue
 
-                groups.append(AutoScalingGroup(
-                    client, region, kube_nodes, raw_group,
-                    launch_configs[raw_group['LaunchConfigurationName']]))
+                    groups.append(AutoScalingGroup(
+                        client, region, kube_nodes, raw_group,
+                        launch_configs[raw_group['LaunchConfigurationName']]))
 
         return groups
 
