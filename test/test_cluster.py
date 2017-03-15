@@ -36,7 +36,7 @@ class TestCluster(unittest.TestCase):
         for moto_mock in self.mocks:
             moto_mock.start()
 
-        client = boto3.client('autoscaling')
+        client = boto3.client('autoscaling', region_name='us-west-2')
         self.asg_client = client
 
         client.create_launch_configuration(
@@ -235,7 +235,7 @@ class TestCluster(unittest.TestCase):
         for pods in pod_scenarios:
             state = self.cluster.get_node_state(
                 node, asgs[0], pods, pods_to_schedule,
-                running_insts_map, collections.Counter(), {})
+                running_insts_map, collections.Counter(), {}, {})
             self.assertEqual(state, ClusterNodeState.BUSY)
 
             self.cluster.maintain(
@@ -283,7 +283,7 @@ class TestCluster(unittest.TestCase):
         for pods in pod_scenarios:
             state = self.cluster.get_node_state(
                 node, asgs[0], pods, pods_to_schedule,
-                running_insts_map, collections.Counter(), {})
+                running_insts_map, collections.Counter(), {}, {})
             self.assertEqual(state, ClusterNodeState.UNDER_UTILIZED_UNDRAINABLE)
 
             self.cluster.maintain(
@@ -320,7 +320,7 @@ class TestCluster(unittest.TestCase):
 
         state = self.cluster.get_node_state(
             node, asgs[0], pods, pods_to_schedule,
-            running_insts_map, collections.Counter(), {})
+            running_insts_map, collections.Counter(), {}, {})
         self.assertEqual(state, ClusterNodeState.UNDER_UTILIZED_DRAINABLE)
 
         self.cluster.maintain(
