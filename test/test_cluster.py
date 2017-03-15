@@ -235,7 +235,7 @@ class TestCluster(unittest.TestCase):
         for pods in pod_scenarios:
             state = self.cluster.get_node_state(
                 node, asgs[0], pods, pods_to_schedule,
-                running_insts_map, collections.Counter(), {})
+                running_insts_map, collections.Counter(), {}, {})
             self.assertEqual(state, ClusterNodeState.BUSY)
 
             self.cluster.maintain(
@@ -283,7 +283,7 @@ class TestCluster(unittest.TestCase):
         for pods in pod_scenarios:
             state = self.cluster.get_node_state(
                 node, asgs[0], pods, pods_to_schedule,
-                running_insts_map, collections.Counter(), {})
+                running_insts_map, collections.Counter(), {}, {})
             self.assertEqual(state, ClusterNodeState.UNDER_UTILIZED_UNDRAINABLE)
 
             self.cluster.maintain(
@@ -320,7 +320,7 @@ class TestCluster(unittest.TestCase):
 
         state = self.cluster.get_node_state(
             node, asgs[0], pods, pods_to_schedule,
-            running_insts_map, collections.Counter(), {})
+            running_insts_map, collections.Counter(), {}, {})
         self.assertEqual(state, ClusterNodeState.UNDER_UTILIZED_DRAINABLE)
 
         self.cluster.maintain(
