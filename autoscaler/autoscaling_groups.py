@@ -316,7 +316,7 @@ class AutoScalingTimeouts(object):
             client = self.session.client('ec2', region_name=region)
             kwargs = {
                 'StartTime': newest_spot_price,
-                'InstanceTypes': instance_asg_map.keys(),
+                'InstanceTypes': list(instance_asg_map.keys()),
                 'ProductDescriptions': ['Linux/UNIX']
             }
             history.extend(aws_utils.fetch_all(
@@ -381,8 +381,7 @@ class AutoScalingGroup(object):
                                 if inst.get('InstanceId'))
         self.nodes = [node for node in kube_nodes
                       if node.instance_id in self.instance_ids]
-        self.unschedulable_nodes = filter(
-            lambda n: n.unschedulable, self.nodes)
+        self.unschedulable_nodes = [n for n in self.nodes if n.unschedulable]
 
         self._id = (self.region, self.name)
 

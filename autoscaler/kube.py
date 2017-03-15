@@ -40,8 +40,7 @@ class KubePod(object):
         self.start_time = dateutil_parse(pod.obj['status']['startTime']) if 'startTime' in pod.obj['status'] else None
 
         # TODO: refactor
-        requests = map(lambda c: c.get('resources', {}).get('requests', {}),
-                       pod.obj['spec']['containers'])
+        requests = [c.get('resources', {}).get('requests', {}) for c in pod.obj['spec']['containers']]
         resource_requests = {}
         for d in requests:
             for k, v in d.items():
@@ -272,4 +271,4 @@ class KubeResource(object):
 
     @property
     def possible(self):
-        return all(map(lambda x: x >= 0, self.raw.values()))
+        return all([x >= 0 for x in self.raw.values()])

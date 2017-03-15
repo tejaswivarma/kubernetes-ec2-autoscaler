@@ -1,6 +1,6 @@
 import json
 import logging
-import urlparse
+import urllib.parse
 
 import requests
 
@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 class ReservationClient(object):
     def _url(self, path):
-        return urlparse.urljoin('http://reservation-api.{}/v1/'.format(Config.NAMESPACE), path)
+        return urllib.parse.urljoin('http://reservation-api.{}/v1/'.format(Config.NAMESPACE), path)
 
     def list_reservations(self):
         req = requests.get(self._url('reservations'))

@@ -1,5 +1,5 @@
 import logging
-import urlparse
+import urllib.parse
 import re
 
 from dateutil.parser import parse as dateutil_parse
@@ -21,7 +21,7 @@ class AzureClient(object):
         self.region = region
 
     def _url(self, path):
-        return urlparse.urljoin('http://azure-{}.{}/'.format(self.region, Config.NAMESPACE), path)
+        return urllib.parse.urljoin('http://azure-{}.{}/'.format(self.region, Config.NAMESPACE), path)
 
     def list_instances(self):
         try:
@@ -147,8 +147,7 @@ class AzureGroup(AutoScalingGroup):
         self.instances = dict((inst.id, inst) for inst in instances)
         self.nodes = [node for node in kube_nodes
                       if node.instance_id in self.instances]
-        self.unschedulable_nodes = filter(
-            lambda n: n.unschedulable, self.nodes)
+        self.unschedulable_nodes = [n for n in self.nodes if n.unschedulable]
 
         self._id = (self.region, self.name)
 

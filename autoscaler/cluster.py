@@ -144,14 +144,14 @@ class Cluster(object):
                 logger.warn('Failed to list nodes. Please check kube configuration. Terminating scale loop.')
                 return False
 
-            all_nodes = map(KubeNode, pykube_nodes)
+            all_nodes = list(map(KubeNode, pykube_nodes))
             managed_nodes = [node for node in all_nodes if node.is_managed()]
 
             self._disable_azure = False
 
             running_insts_map = self.get_running_instances_map(managed_nodes)
 
-            pods = map(KubePod, pykube.Pod.objects(self.api))
+            pods = list(map(KubePod, pykube.Pod.objects(self.api)))
 
             running_or_pending_assigned_pods = [
                 p for p in pods if (p.status == KubePodStatus.RUNNING or p.status == KubePodStatus.CONTAINER_CREATING) or (
