@@ -343,7 +343,7 @@ class Cluster(object):
                     for inst_id in unmanaged_instance_ids:
                         inst = asg.instances[inst_id]
                         if (datetime.datetime.now(inst.launch_time.tzinfo)
-                                - inst.launch_time).seconds >= (2.5 * self.instance_init_time):
+                                - inst.launch_time).seconds >= (5 * self.instance_init_time):
                             if not self.dry_run:
                                 logger.info("terminating unmanaged %s" % inst)
                                 asg.terminate_instance(inst_id)
