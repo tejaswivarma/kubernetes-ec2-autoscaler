@@ -110,7 +110,7 @@ class TestCluster(unittest.TestCase):
         pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
         selectors_hash = utils.selectors_to_hash(pod.selectors)
         asgs = self.cluster.autoscaling_groups.get_all_groups([])
-        self.cluster.fulfill_pending(asgs, selectors_hash, [pod])
+        self.cluster.fulfill_pending(asgs, selectors_hash, [pod], [])
 
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -120,7 +120,7 @@ class TestCluster(unittest.TestCase):
         pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
         selectors_hash = utils.selectors_to_hash(pod.selectors)
         asgs = self.cluster.autoscaling_groups.get_all_groups([])
-        self.cluster.fulfill_pending(asgs, selectors_hash, [pod])
+        self.cluster.fulfill_pending(asgs, selectors_hash, [pod], [])
 
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)

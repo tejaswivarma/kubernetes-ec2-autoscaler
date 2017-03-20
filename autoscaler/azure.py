@@ -14,7 +14,7 @@ import autoscaler.utils as utils
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TAG_VALUE = 'default'
-
+UNRESERVED_HOST = 'legacy-default-reservation-do-not-use'
 
 class AzureClient(object):
     def __init__(self, region='us-south-central'):
@@ -129,6 +129,8 @@ class AzureGroup(AutoScalingGroup):
         self.client = client
         self.instance_type = instance_type
         self.tags = tags
+        # XXX: backwards compatibility hack, for when reservations were implemented with Azure tags
+        self.tags['openai.org/reservation-id'] = UNRESERVED_HOST
         self.name = instance_type
         self.desired_capacity = len(instances)
 
@@ -154,15 +156,6 @@ class AzureGroup(AutoScalingGroup):
     @property
     def instance_ids(self):
         return set(self.instances.keys())
-
-    def clone(self, extra_tags):
-        tags = dict(self.tags)
-        tags.update(extra_tags)
-        group_instances = [
-            inst for inst in self.instances.values()
-            if all(inst.tags[k] == tags[k] for k in tags.keys())]
-        return AzureGroup(self.client, self.instance_type, tags,
-                          group_instances, self.nodes)
 
     def set_desired_capacity(self, new_desired_capacity):
         """
@@ -207,10 +200,6 @@ class AzureInstance(object):
         self.instance_type = data['instance_type']
         self.launch_time = dateutil_parse(data['launch_time'])
         self.tags = data['tags']
-
-    @property
-    def reservation_id(self):
-        return self.tags.get('openai.org/reservation-id')
 
     def __str__(self):
         return 'AzureInstance({}, {})'.format(self.id, self.instance_type)

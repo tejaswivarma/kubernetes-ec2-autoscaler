@@ -9,6 +9,8 @@ from autoscaler.kube import KubeResource
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_ID = 'default'
+
 
 class ReservationClient(object):
     def _url(self, path):
@@ -21,7 +23,7 @@ class ReservationClient(object):
 
 
 class Reservation(object):
-    def __init__(self, data, instances, kube_nodes):
+    def __init__(self, data, kube_nodes):
         self.id = data['id']
         self.username = data['username']
         self.name = data['name']
@@ -29,11 +31,9 @@ class Reservation(object):
 
         self.resources = json.loads(data['resources'])
 
-        self.instance_ids = set(inst_id for inst_id, inst in instances.items()
-                                if getattr(inst, 'reservation_id', None) == self.id)
         self.nodes = [node for node in kube_nodes
-                      if node.instance_id in self.instance_ids and
-                      self._is_match(node)]
+                      if node.reservation_id == self.id and
+                      self.is_match(node)]
 
     def get_pending_resources(self):
         schedulable_nodes = [node for node in self.nodes
@@ -44,6 +44,10 @@ class Reservation(object):
 
         return (self.kube_resources_requested - fulfilled,
                 self.num_instances_requested - len(schedulable_nodes))
+
+    def add_node(self, node):
+        assert node.reservation_id == self.id
+        self.nodes.append(node)
 
     @property
     def num_instances_requested(self):
@@ -56,13 +60,7 @@ class Reservation(object):
         resources = KubeResource(**resources)
         return resources
 
-    @property
-    def tags(self):
-        return {
-            'openai.org/reservation-id': self.id
-        }
-
-    def _is_match(self, node):
+    def is_match(self, node):
         return all(node.selectors.get(k) == self.node_selectors[k]
                    for k in self.node_selectors.keys())
 

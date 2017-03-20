@@ -132,6 +132,16 @@ class KubeNode(object):
     def reservation_id(self):
         return self.selectors.get('openai.org/reservation-id')
 
+    @reservation_id.setter
+    def reservation_id(self, reservation_id):
+        if reservation_id == self.reservation_id:
+            return
+        self.original.reload()
+        self.original.obj['metadata'].setdefault('labels', {})['openai.org/reservation-id'] = reservation_id
+        self.original.update()
+        self.selectors = self.original.obj['metadata'].get('labels', {})
+        logger.info("Assigned %s (%s) to reservation %s", self.name, self.instance_id, reservation_id)
+
     @property
     def unschedulable(self):
         return self.original.obj['spec'].get('unschedulable', False)

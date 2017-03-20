@@ -168,15 +168,20 @@ class Cluster(object):
             pods_to_schedule = self.get_pods_to_schedule(pods)
 
             res_data = self.reservation_client.list_reservations()
-            reservations_map = dict((r['id'], reservations.Reservation(r, running_insts_map, managed_nodes))
+            reservations_map = dict((r['id'], reservations.Reservation(r, managed_nodes))
                                     for r in res_data['reservations'])
+
+            pods_by_node = {}
+            for p in running_or_pending_assigned_pods:
+                pods_by_node.setdefault(p.node_name, []).append(p)
+            pending_reservations = self.assign_nodes_to_reservations(managed_nodes, pods_by_node, reservations_map)
 
             if self.scale_up:
                 logger.info(
                     "++++++++++++++ Scaling Up Begins ++++++++++++++++")
                 self.scale(
                     pods_to_schedule, all_nodes, scaling_groups,
-                    running_insts_map, reservations_map)
+                    running_insts_map, pending_reservations)
                 logger.info("++++++++++++++ Scaling Up Ends ++++++++++++++++")
             if self.maintainance:
                 logger.info(
@@ -194,8 +199,7 @@ class Cluster(object):
             logger.warn(e)
             return False
 
-    def scale(self, pods_to_schedule, all_nodes, asgs, running_insts_map,
-              reservations_map):
+    def scale(self, pods_to_schedule, all_nodes, asgs, running_insts_map, pending_reservations):
         """
         scale up logic
         """
@@ -212,7 +216,7 @@ class Cluster(object):
                     or (not node.is_managed()):
                 cached_live_nodes.append(node)
 
-        # asg name -> pending KubePods
+        # selectors -> pending KubePods
         pending_pods = {}
 
         # for each pending & unassigned job, try to fit them on current machines or count requested
@@ -236,11 +240,22 @@ class Cluster(object):
                     logger.info("{pod} fits on {node}".format(pod=pod,
                                                               node=fitting))
 
-        # scale each node type to reach the new capacity
-        for selectors_hash, pending in pending_pods.items():
-            self.fulfill_pending(asgs, selectors_hash, pending)
+        # selectors -> list of reservations
+        reservations_by_selector = {}
 
-        self.fulfill_reservations(asgs, reservations_map)
+        for reservation in pending_reservations:
+            selectors_hash = utils.selectors_to_hash(reservation.node_selectors)
+            reservations_by_selector.setdefault(selectors_hash, []).append(reservation)
+            pending_resources, num_instances = reservation.get_pending_resources()
+            logger.debug('pending %s: resources[%s] instances [%s]',
+                         reservation, pending_resources, num_instances)
+
+        # scale each node type to reach the new capacity
+        for selectors_hash in set(pending_pods.keys()).union(set(reservations_by_selector.keys())):
+            self.fulfill_pending(asgs,
+                                 selectors_hash,
+                                 pending_pods.get(selectors_hash, []),
+                                 reservations_by_selector.get(selectors_hash, []))
 
         # TODO: make sure desired capacities of untouched groups are consistent
 
@@ -376,7 +391,52 @@ class Cluster(object):
                                 logger.info(
                                     '[Dry run] Would have terminated unmanaged %s [%s]', inst, asg.region)
 
-    def fulfill_pending(self, asgs, selectors_hash, pods):
+    def assign_nodes_to_reservations(self, nodes, pods_by_node, reservations_map):
+        pending_reservations = set()
+        for reservation in reservations_map.values():
+            resources, instances = reservation.get_pending_resources()
+            if resources.possible or instances > 0:
+                pending_reservations.add(reservation)
+
+        busy_nodes = {}
+        for node_name, pods in pods_by_node.items():
+            busy_nodes[node_name] = any(not pod.is_mirrored() for pod in pods)
+
+        for node in nodes:
+            if not busy_nodes.get(node.name, False) and not node.unschedulable and \
+                    (node.reservation_id is None or node.reservation_id == azure.UNRESERVED_HOST):
+                # node is unused, look for a reservation to assign it to
+                found_match = False
+                for reservation in pending_reservations:
+                    if reservation.is_match(node):
+                        found_match = True
+                        if not self.dry_run:
+                            # There's a race here, but it shouldn't matter. A pod may have been scheduled on this node
+                            # after we observed the node's state. However, since the reservation-id is None, that pod
+                            # must be scheduled with a selector that doesn't include reservation-id (in which case
+                            # there's no race), or with the !openai.org/reservation-id selector (which doesn't seem
+                            # like a valid use-case)
+                            node.reservation_id = reservation.id
+                            reservation.add_node(node)
+                        else:
+                            logger.info("[Dry run]: Would have assigned node (%s) to reservation (%s)",
+                                        node.name, reservation)
+                        resources, instances = reservation.get_pending_resources()
+                        if not resources.possible and instances <= 0:
+                            pending_reservations.remove(reservation)
+                        break
+
+                # Assign it to the default reservation, if no other reservation requested this node
+                if not found_match:
+                    if not self.dry_run:
+                        node.reservation_id = reservations.DEFAULT_ID
+                    else:
+                        logger.info("[Dry run]: Would have assigned node (%s) to reservation (%s)",
+                                    node.name, reservations.DEFAULT_ID)
+
+        return pending_reservations
+
+    def fulfill_pending(self, asgs, selectors_hash, pods, reservations_list):
         """
         selectors_hash - string repr of selectors
         pods - list of KubePods that are pending
@@ -387,6 +447,7 @@ class Cluster(object):
 
         accounted_pods = dict((p, False) for p in pods)
         num_unaccounted = len(pods)
+        pending_reservations = dict((r.id, r) for r in reservations_list)
 
         groups = utils.get_groups_for_hash(asgs, selectors_hash)
 
@@ -413,6 +474,22 @@ class Cluster(object):
                     new_instance_resources.append(
                         unit_capacity - pod.resources)
                     assigned_pods.append([pod])
+
+            fulfilled_reservations = []
+            for reservation_id, reservation in pending_reservations.items():
+                if not group.is_match_for_selectors(reservation.node_selectors):
+                    continue
+
+                resources, instances = reservation.get_pending_resources()
+                units_needed = self._get_required_capacity(resources, group)
+                units_requested = max(units_needed, instances)
+                # Multiply by 0, since we're reserving the whole machine
+                new_instance_resources.extend([unit_capacity * 0] * units_requested)
+                fulfilled_reservations.append(reservation_id)
+                logger.info('Planning to request %s more of %s for %s', units_requested, group, reservation_id)
+
+            for reservation_id in fulfilled_reservations:
+                del pending_reservations[reservation_id]
 
             # new desired # machines = # running nodes + # machines required to fit jobs that don't
             # fit on running nodes. This scaling is conservative but won't
@@ -458,57 +535,8 @@ class Cluster(object):
             logger.warn('Failed to scale sufficiently.')
             self.notifier.notify_failed_to_scale(selectors_hash, pods)
 
-    def fulfill_reservations(self, asgs, reservations_map):
-        """
-        selectors_hash - string repr of selectors
-        pods - list of KubePods that are pending
-        """
-        logger.info(
-            "========= Scaling for reservations ========")
-
-        for reservation in reservations_map.values():
-            (pending_resources, num_instances) = reservation.get_pending_resources()
-
-            if not (pending_resources.possible or num_instances > 0):
-                continue
-
-            logger.debug('pending %s: resources[%s] instances [%s]',
-                         reservation, pending_resources, num_instances)
-
-            groups = utils.get_groups_for_hash(asgs, utils.selectors_to_hash(reservation.node_selectors))
-
-            for group in groups:
-                if group.provider != 'azure':
-                    continue
-
-                reservation_group = group.clone(reservation.tags)
-                logger.debug("group: %s", reservation_group)
-
-                units_needed = self._get_required_capacity(pending_resources, reservation_group)
-
-                units_requested = max(units_needed, num_instances)
-
-                logger.debug("units_needed: %s", units_needed)
-                logger.debug("units_requested: %s", units_requested)
-
-                new_capacity = reservation_group.actual_capacity + units_requested
-                if not self.dry_run:
-                    scaled = reservation_group.scale(new_capacity)
-
-                    if scaled:
-                        # self.notifier.notify_scale(group, units_requested, pods)
-                        logger.info('Scaled %s for %s for %s', reservation_group, units_requested, reservation)
-                else:
-                    logger.info('[Dry run] Would have scaled up to %s', new_capacity)
-
-                pending_resources -= units_requested * capacity.get_unit_capacity(group)
-                num_instances -= units_requested
-
-                if not pending_resources.possible and num_instances <= 0:
-                    break
-
-            if pending_resources.possible or num_instances > 0:
-                logger.warn('Failed to scale sufficiently for %s', reservation)
+        for reservation_id in pending_reservations.keys():
+            logger.warn('Failed to scale sufficiently for %s', reservation_id)
 
     def get_running_instances_in_region(self, region, instance_ids):
         """
