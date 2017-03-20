@@ -20,11 +20,11 @@ struct_logger.propagate = False
 
 def _cache_key(notifier, owner, message, pods):
     md5 = hashlib.md5()
-    md5.update(owner)
-    md5.update(message)
+    md5.update(owner.encode('utf-8'))
+    md5.update(message.encode('utf-8'))
 
     for pod in sorted(pods, key=lambda p: p.uid):
-        md5.update(pod.uid)
+        md5.update(pod.uid.encode('utf-8'))
 
     key = 'v0.md5.{}'.format(md5.hexdigest())
     return key
