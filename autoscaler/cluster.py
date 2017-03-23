@@ -9,6 +9,7 @@ import boto3
 import botocore.exceptions
 import datadog
 import pykube
+import pytz
 
 import autoscaler.autoscaling_groups as autoscaling_groups
 import autoscaler.azure as azure
@@ -652,7 +653,11 @@ class Cluster(object):
         pending_list = []
         for pods in pods_to_schedule.values():
             for pod in pods:
-                if node.is_match(pod):
+                # a pod is considered schedulable onto this node if all the
+                # node selectors match
+                # AND it doesn't use pod affinity (which we don't support yet)
+                if (node.is_match(pod) and
+                        'scheduler.alpha.kubernetes.io/affinity' not in pod.annotations):
                     pending_list.append(pod)
         # we consider a node to be busy if it's running any non-DaemonSet pods
         # TODO: we can be a bit more aggressive in killing pods that are
@@ -716,6 +721,7 @@ class Cluster(object):
             return ClusterNodeState.BUSY
 
         if pending_list and not node.unschedulable:
+            # logger.warn('PENDING: %s', pending_list)
             return ClusterNodeState.POD_PENDING
 
         if launch_hour_offset < self.LAUNCH_HOUR_THRESHOLD and not node.unschedulable:
