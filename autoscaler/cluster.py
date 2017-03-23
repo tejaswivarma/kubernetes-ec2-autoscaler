@@ -11,6 +11,12 @@ import datadog
 import pykube
 import pytz
 
+from dateutil.parser import parse as dateutil_parse
+
+from azure.mgmt.resource.resources import ResourceManagementClient
+from azure.common.credentials import ServicePrincipalCredentials
+from msrestazure.azure_exceptions import CloudError
+
 import autoscaler.autoscaling_groups as autoscaling_groups
 import autoscaler.azure as azure
 import autoscaler.capacity as capacity
@@ -69,8 +75,9 @@ class Cluster(object):
         'm4.10xlarge': 0
     }
 
-    def __init__(self, aws_regions, aws_access_key, aws_secret_key,
-                 azure_regions, kubeconfig,
+    def __init__(self, aws_regions, aws_access_key, aws_secret_key, azure_legacy_regions,
+                 azure_client_id, azure_client_secret, azure_subscription_id, azure_tenant_id,
+                 azure_resource_groups, kubeconfig,
                  idle_threshold, type_idle_threshold,
                  instance_init_time, cluster_name, notifier,
                  scale_up=True, maintainance=True,
@@ -98,12 +105,38 @@ class Cluster(object):
         self.autoscaling_timeouts = autoscaling_groups.AutoScalingTimeouts(
             self.session)
 
-        self.azure_groups = azure.AzureGroups(azure_regions)
+        azure_regions = []
+        if azure_client_id:
+            azure_credentials = ServicePrincipalCredentials(
+                client_id=azure_client_id,
+                secret=azure_client_secret,
+                tenant=azure_tenant_id
+            )
+
+            # Setup the Azure client
+            resource_client = ResourceManagementClient(azure_credentials, azure_subscription_id)
+            resource_client.providers.register('Microsoft.Compute')
+            resource_client.providers.register('Microsoft.Network')
+
+            region_map = {}
+            for resource_group_name in azure_resource_groups:
+                location = resource_client.resource_groups.get(resource_group_name).location
+                if location in region_map:
+                    logger.fatal("{} and {} are both in {}. May only have one resource group per region".format(
+                        resource_group_name, region_map[location], location
+                    ))
+                region_map[location] = resource_group_name
+                azure_regions.append(location)
+        else:
+            azure_credentials = None
+
+        self.azure_groups = azure.AzureGroups(azure_legacy_regions, azure_resource_groups, azure_credentials, azure_subscription_id)
 
         self.reservation_client = reservations.ReservationClient()
 
         # config
         self.azure_regions = azure_regions
+        self.azure_legacy_regions = azure_legacy_regions
         self.aws_regions = aws_regions
         self.idle_threshold = idle_threshold
         self.instance_init_time = instance_init_time
@@ -143,8 +176,6 @@ class Cluster(object):
 
             self._disable_azure = False
 
-            running_insts_map = self.get_running_instances_map(managed_nodes)
-
             pods = list(map(KubePod, pykube.Pod.objects(self.api, namespace=pykube.all)))
 
             running_or_pending_assigned_pods = [
@@ -164,6 +195,11 @@ class Cluster(object):
             azure_groups = self.azure_groups.get_all_groups(all_nodes)
             scaling_groups = asgs + azure_groups
             self.stats.gauge('autoscaler.scaling_loop.scaling_group_lookup_time', time.time() - scaling_group_lookup_start_time)
+
+            instance_lookup_start_time = time.time()
+            running_insts_map = self.get_running_instances_map(managed_nodes, azure_groups)
+            self.stats.gauge('autoscaler.scaling_loop.instance_lookup_time', time.time() - instance_lookup_start_time)
+
 
             pods_to_schedule = self.get_pods_to_schedule(pods)
 
@@ -283,6 +319,7 @@ class Cluster(object):
 
         stats_time = time.time()
 
+        async_operations = []
         for node in cached_managed_nodes:
             asg = utils.get_group_for_node(asgs, node)
             state = self.get_node_state(
@@ -334,7 +371,7 @@ class Cluster(object):
                     if not asg:
                         logger.warn('Cannot find ASG for node %s. Not terminated.', node)
                     else:
-                        asg.scale_node_in(node)
+                        async_operations.append(asg.scale_node_in(node))
                 else:
                     logger.info('[Dry run] Would have scaled in %s', node)
             elif state == ClusterNodeState.INSTANCE_TERMINATED:
@@ -362,7 +399,7 @@ class Cluster(object):
                                 - inst.launch_time).seconds >= (10 * self.instance_init_time):
                             if not self.dry_run:
                                 logger.info("terminating unmanaged %s" % inst)
-                                asg.terminate_instance(inst_id)
+                                async_operations.append(asg.terminate_instance(inst_id))
                                 self.stats.increment(
                                     'kubernetes.custom.node.state.unmanaged',
                                     timestamp=stats_time)
@@ -391,6 +428,13 @@ class Cluster(object):
                                 logger.info(
                                     '[Dry run] Would have terminated unmanaged %s [%s]', inst, asg.region)
 
+        # Wait for all background scale-in operations to complete
+        for operation in async_operations:
+            try:
+                operation.result()
+            except CloudError as e:
+                logger.warn("Error while deleting Azure node: {}".format(e.message))
+
     def assign_nodes_to_reservations(self, nodes, pods_by_node, reservations_map):
         pending_reservations = set()
         for reservation in reservations_map.values():
@@ -404,7 +448,7 @@ class Cluster(object):
 
         for node in nodes:
             if not busy_nodes.get(node.name, False) and not node.unschedulable and \
-                    (node.reservation_id is None or node.reservation_id == azure.UNRESERVED_HOST):
+                    (node.reservation_id is None or node.reservation_id == azure.UNRESERVED_HOST or node.reservation_id == 'none'):
                 # node is unused, look for a reservation to assign it to
                 found_match = False
                 for reservation in pending_reservations:
@@ -453,6 +497,7 @@ class Cluster(object):
 
         groups = self._prioritize_groups(groups)
 
+        async_operations = []
         for group in groups:
             logger.debug("group: %s", group)
 
@@ -513,10 +558,14 @@ class Cluster(object):
 
             new_capacity = group.actual_capacity + units_requested
             if not self.dry_run:
-                scaled = group.scale(new_capacity)
+                async_operation = group.scale(new_capacity)
+                async_operations.append(async_operation)
 
-                if scaled:
-                    self.notifier.notify_scale(group, units_requested, pods)
+                def notify_if_scaled(future):
+                    if future.result():
+                        self.notifier.notify_scale(group, units_requested, pods)
+
+                async_operation.add_done_callback(notify_if_scaled)
             else:
                 logger.info(
                     '[Dry run] Would have scaled up to %s', new_capacity)
@@ -537,6 +586,12 @@ class Cluster(object):
 
         for reservation_id in pending_reservations.keys():
             logger.warn('Failed to scale sufficiently for %s', reservation_id)
+
+        for operation in async_operations:
+            try:
+                operation.result()
+            except CloudError as e:
+                logger.warn("Error while scaling Scale Set: {}".format(e.message))
 
     def get_running_instances_in_region(self, region, instance_ids):
         """
@@ -581,7 +636,7 @@ class Cluster(object):
                     for inst in self.get_running_instances_in_region(region, [instance_id]):
                         yield inst
 
-    def get_running_instances_map(self, nodes):
+    def get_running_instances_map(self, nodes, azure_groups):
         """
         given a list of KubeNode's, return a map of
         instance_id -> ec2.Instance object
@@ -589,16 +644,21 @@ class Cluster(object):
         instance_map = {}
 
         # first get azure instances
-        for region in self.azure_regions:
+        for region in self.azure_legacy_regions:
             client = azure.AzureClient(region)
             instances_data = client.list_instances()
             if 'error' in instances_data:
                 self._disable_azure = True
                 logger.warn('Disabling Azure for loop')
 
-            instances = [azure.AzureInstance(inst_data)
+            instances = [azure.AzureInstance(inst_data['id'], inst_data['instance_type'], dateutil_parse(inst_data['launch_time']), inst_data['tags'])
                          for inst_data in instances_data.get('instances', [])]
             instance_map.update((inst.id, inst) for inst in instances)
+
+        for group in azure_groups:
+            if isinstance(group, azure.AzureVirtualScaleSet):
+                for instance in group.get_azure_instances():
+                    instance_map[instance.id] = instance
 
         # now get aws instances
         instance_id_by_region = {}
@@ -648,12 +708,9 @@ class Cluster(object):
         def sort_key(group):
             region = self._GROUP_DEFAULT_PRIORITY
             try:
-                region = self.azure_regions.index(group.region)
+                region = (self.azure_regions + self.aws_regions + self.azure_legacy_regions).index(group.region)
             except ValueError:
-                try:
-                    region = len(self.azure_regions) + self.aws_regions.index(group.region)
-                except ValueError:
-                    pass
+                pass
             # Some ASGs are pinned to be in a single AZ. Sort them in front of
             # multi-ASG groups that won't have this tag set.
             pinned_to_az = group.selectors.get('aws/az', 'z')

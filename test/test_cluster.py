@@ -77,7 +77,12 @@ class TestCluster(unittest.TestCase):
             aws_access_key='',
             aws_secret_key='',
             aws_regions=['us-west-2', 'us-east-1', 'us-west-1'],
-            azure_regions=[],
+            azure_client_id='',
+            azure_client_secret='',
+            azure_subscription_id='',
+            azure_tenant_id='',
+            azure_legacy_regions=[],
+            azure_resource_groups=[],
             kubeconfig='~/.kube/config',
             idle_threshold=60,
             instance_init_time=60,
@@ -187,7 +192,7 @@ class TestCluster(unittest.TestCase):
 
         all_nodes = [node]
         managed_nodes = [n for n in all_nodes if node.is_managed()]
-        running_insts_map = self.cluster.get_running_instances_map(managed_nodes)
+        running_insts_map = self.cluster.get_running_instances_map(managed_nodes, [])
         pods_to_schedule = {}
         asgs = self.cluster.autoscaling_groups.get_all_groups(all_nodes)
 
@@ -214,7 +219,7 @@ class TestCluster(unittest.TestCase):
         node = self._spin_up_node()
         all_nodes = [node]
         managed_nodes = [n for n in all_nodes if node.is_managed()]
-        running_insts_map = self.cluster.get_running_instances_map(managed_nodes)
+        running_insts_map = self.cluster.get_running_instances_map(managed_nodes, [])
         pods_to_schedule = {}
         asgs = self.cluster.autoscaling_groups.get_all_groups(all_nodes)
 
@@ -240,7 +245,7 @@ class TestCluster(unittest.TestCase):
         node = self._spin_up_node()
         all_nodes = [node]
         managed_nodes = [n for n in all_nodes if node.is_managed()]
-        running_insts_map = self.cluster.get_running_instances_map(managed_nodes)
+        running_insts_map = self.cluster.get_running_instances_map(managed_nodes, [])
         pods_to_schedule = {}
         asgs = self.cluster.autoscaling_groups.get_all_groups(all_nodes)
 
@@ -265,7 +270,7 @@ class TestCluster(unittest.TestCase):
         node = self._spin_up_node()
         all_nodes = [node]
         managed_nodes = [n for n in all_nodes if node.is_managed()]
-        running_insts_map = self.cluster.get_running_instances_map(managed_nodes)
+        running_insts_map = self.cluster.get_running_instances_map(managed_nodes, [])
         pods_to_schedule = {}
         asgs = self.cluster.autoscaling_groups.get_all_groups(all_nodes)
 
@@ -307,7 +312,7 @@ class TestCluster(unittest.TestCase):
         node = self._spin_up_node()
         all_nodes = [node]
         managed_nodes = [n for n in all_nodes if node.is_managed()]
-        running_insts_map = self.cluster.get_running_instances_map(managed_nodes)
+        running_insts_map = self.cluster.get_running_instances_map(managed_nodes, [])
         pods_to_schedule = {}
         asgs = self.cluster.autoscaling_groups.get_all_groups(all_nodes)
 
@@ -355,7 +360,7 @@ class TestCluster(unittest.TestCase):
         node = self._spin_up_node()
         all_nodes = [node]
         managed_nodes = [n for n in all_nodes if node.is_managed()]
-        running_insts_map = self.cluster.get_running_instances_map(managed_nodes)
+        running_insts_map = self.cluster.get_running_instances_map(managed_nodes, [])
         pods_to_schedule = {}
         asgs = self.cluster.autoscaling_groups.get_all_groups(all_nodes)
 

@@ -100,6 +100,13 @@ class KubePod(object):
         return str(self)
 
 
+def reverse_bytes(value):
+    assert len(value) % 2 == 0
+    result = ""
+    for i in range(len(value), 0, -2):
+        result += value[i - 2: i]
+    return result
+
 class KubeNode(object):
     def __init__(self, node):
         self.original = node
@@ -132,8 +139,22 @@ class KubeNode(object):
             region = labels['aws/az'][:-1]
             return (instance_id, region, instance_type, 'aws')
 
-        if labels.get('azure/id'):
-            instance_id = labels['azure/id']
+        azure_id = labels.get('azure/id')
+        if azure_id:
+            # TODO: remove this once we remove the legacy Azure code path. Then this can be merged into the provider
+            # handling for AWS above
+            if azure_id == 'use-vm-id':
+                assert provider.startswith('azure:////'), provider
+                # Id is in wrong order: https://azure.microsoft.com/en-us/blog/accessing-and-using-azure-vm-unique-id/
+                big_endian_vm_id = provider.replace('azure:////', '')
+                parts = big_endian_vm_id.split('-')
+                instance_id = '-'.join([reverse_bytes(parts[0]),
+                                        reverse_bytes(parts[1]),
+                                        reverse_bytes(parts[2]),
+                                        parts[3],
+                                        parts[4]]).lower()
+            else:
+                instance_id = labels['azure/id']
             region = labels['azure/region']
             instance_type = labels['azure/type']
             return (instance_id, region, instance_type, 'azure')

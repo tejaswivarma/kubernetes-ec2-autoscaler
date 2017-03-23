@@ -28,6 +28,11 @@ DEBUG_LOGGING_MAP = {
 @click.option("--idle-threshold", default=3300)
 @click.option("--type-idle-threshold", default=3600*24*7)
 @click.option("--over-provision", default=5)
+@click.option("--azure-resource-groups")
+@click.option("--azure-client-id", default=None, envvar='AZURE_CLIENT_ID')
+@click.option("--azure-client-secret", default=None, envvar='AZURE_CLIENT_SECRET')
+@click.option("--azure-subscription-id", default=None, envvar='AZURE_SUBSCRIPTION_ID')
+@click.option("--azure-tenant-id", default=None, envvar='AZURE_TENANT_ID')
 @click.option("--aws-access-key", default=None, envvar='AWS_ACCESS_KEY_ID')
 @click.option("--aws-secret-key", default=None, envvar='AWS_SECRET_ACCESS_KEY')
 @click.option("--datadog-api-key", default=None, envvar='DATADOG_API_KEY')
@@ -46,7 +51,8 @@ DEBUG_LOGGING_MAP = {
                    "for more verbosity.",
               type=click.IntRange(0, 3, clamp=True),
               count=True)
-def main(cluster_name, aws_regions, azure_regions, sleep, kubeconfig,
+def main(cluster_name, aws_regions, azure_regions, azure_resource_groups, sleep, kubeconfig,
+         azure_client_id, azure_client_secret, azure_subscription_id, azure_tenant_id,
          aws_access_key, aws_secret_key, datadog_api_key,
          idle_threshold, type_idle_threshold,
          over_provision, instance_init_time, no_scale, no_maintenance,
@@ -64,7 +70,12 @@ def main(cluster_name, aws_regions, azure_regions, sleep, kubeconfig,
     cluster = Cluster(aws_access_key=aws_access_key,
                       aws_secret_key=aws_secret_key,
                       aws_regions=aws_regions.split(','),
-                      azure_regions=azure_regions.split(',') if azure_regions else [],
+                      azure_legacy_regions=azure_regions.split(',') if azure_regions else [],
+                      azure_client_id=azure_client_id,
+                      azure_client_secret=azure_client_secret,
+                      azure_subscription_id=azure_subscription_id,
+                      azure_tenant_id=azure_tenant_id,
+                      azure_resource_groups=azure_resource_groups.split(',') if azure_resource_groups else [],
                       kubeconfig=kubeconfig,
                       idle_threshold=idle_threshold,
                       instance_init_time=instance_init_time,

@@ -427,11 +427,12 @@ class AutoScalingGroup(object):
                                          DesiredCapacity=new_desired_capacity,
                                          HonorCooldown=False)
         self.desired_capacity = new_desired_capacity
+        return utils.CompletedFuture(True)
 
     def scale(self, new_desired_capacity):
         """
         scales the ASG to the new desired capacity.
-        returns True if desired capacity has been increased as a result.
+        returns a future with the result True if desired capacity has been increased.
         """
         desired_capacity = min(self.max_size, new_desired_capacity)
         num_unschedulable = len(self.unschedulable_nodes)
@@ -456,7 +457,7 @@ class AutoScalingGroup(object):
             if self.desired_capacity == self.max_size:
                 logger.info("Desired same as max, desired: {}, schedulable: {}".format(
                     self.desired_capacity, num_schedulable))
-                return False
+                return utils.CompletedFuture(False)
 
             scale_up = self.desired_capacity < desired_capacity
             # This should be a rare event
@@ -467,17 +468,16 @@ class AutoScalingGroup(object):
             if scale_up:
                 # should have gotten our num_schedulable to highest value possible
                 # actually need to grow.
-                self.set_desired_capacity(desired_capacity)
-                return True
+                return self.set_desired_capacity(desired_capacity)
 
         logger.info("Doing nothing: desired_capacity correctly set: {}, schedulable: {}".format(
             self.name, num_schedulable))
-        return False
+        return utils.CompletedFuture(False)
 
     def scale_node_in(self, node):
         """
         scale down asg by terminating the given node.
-        returns True if node was successfully terminated.
+        returns a future indicating when the request completes.
         """
         try:
             # if we somehow end up in a situation where we have
@@ -496,9 +496,8 @@ class AutoScalingGroup(object):
                            "violate group's min size constraint.") == -1:
                 raise e
             logger.error("Failed to terminate instance: %s", e)
-            return False
 
-        return True
+        return utils.CompletedFuture(None)
 
     def contains(self, node):
         return node.instance_id in self.instance_ids
