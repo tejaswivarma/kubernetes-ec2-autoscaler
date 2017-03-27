@@ -1,6 +1,8 @@
 import collections
+import json
 import os.path
 import unittest
+import copy
 
 import boto3
 import pykube
@@ -8,8 +10,9 @@ import mock
 import moto
 import yaml
 
+from autoscaler import reservations
 from autoscaler.cluster import Cluster, ClusterNodeState
-from autoscaler.kube import KubePod, KubeNode
+from autoscaler.kube import KubePod, KubeNode, KubeResource
 from autoscaler.notification import Notifier
 import autoscaler.utils as utils
 
@@ -89,19 +92,38 @@ class TestCluster(unittest.TestCase):
             moto_mock.stop()
 
     def _spin_up_node(self, launch_time=None):
+        return self._spin_up_nodes(1, launch_time=launch_time)[0]
+
+    def _spin_up_nodes(self, count, launch_time=None):
+        assert count <= 256
         # spin up dummy ec2 node
         self.asg_client.set_desired_capacity(AutoScalingGroupName='dummy-asg',
-                                             DesiredCapacity=1)
+                                             DesiredCapacity=count)
         response = self.asg_client.describe_auto_scaling_groups()
-        instance_id = response['AutoScalingGroups'][0]['Instances'][0]['InstanceId']
+        nodes = []
+        for i, instance in enumerate(response['AutoScalingGroups'][0]['Instances']):
+            instance_id = instance['InstanceId']
 
-        self.dummy_node['metadata']['labels']['aws/id'] = instance_id
-        node = KubeNode(pykube.Node(self.api, self.dummy_node))
-        node.cordon = mock.Mock(return_value="mocked stuff")
-        node.drain = mock.Mock(return_value="mocked stuff")
-        node.uncordon = mock.Mock(return_value="mocked stuff")
-        node.delete = mock.Mock(return_value="mocked stuff")
-        return node
+            dummy_node = copy.deepcopy(self.dummy_node)
+            dummy_node['metadata']['labels']['aws/id'] = instance_id
+            dummy_node['metadata']['name'] = '10.0.' + str(i) + '.228'
+            node = KubeNode(pykube.Node(self.api, dummy_node))
+            node.cordon = mock.Mock(return_value="mocked stuff")
+            node.drain = mock.Mock(return_value="mocked stuff")
+            node.uncordon = mock.Mock(return_value="mocked stuff")
+            node.delete = mock.Mock(return_value="mocked stuff")
+            nodes.append(node)
+        return nodes
+
+    @staticmethod
+    def _create_reservation(name, instances, nodes):
+        data = {}
+        data['name'] = name
+        data['username'] = 'dummy'
+        data['id'] = data['username'] + '-' + data['name']
+        data['node_selectors'] = '{}'
+        data['resources'] = json.dumps({'instances': instances})
+        return reservations.Reservation(data, nodes)
 
     def test_scale_up_selector(self):
         self.dummy_pod['spec']['nodeSelector'] = {
@@ -125,6 +147,37 @@ class TestCluster(unittest.TestCase):
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
         self.assertGreater(response['AutoScalingGroups'][0]['DesiredCapacity'], 0)
+
+    def test_scale_up_for_reservation(self):
+        reservation = self._create_reservation('test', 2, [])
+        selectors_hash = utils.selectors_to_hash(reservation.node_selectors)
+        asgs = self.cluster.autoscaling_groups.get_all_groups([])
+        self.cluster.fulfill_pending(asgs, selectors_hash, [], [reservation])
+
+        response = self.asg_client.describe_auto_scaling_groups()
+        self.assertEqual(len(response['AutoScalingGroups']), 1)
+        self.assertGreater(response['AutoScalingGroups'][0]['DesiredCapacity'], 0)
+
+    @mock.patch('autoscaler.kube.KubeNode.reservation_id', new_callable=mock.PropertyMock)
+    def test_assign_reserved_nodes(self, mock_reservation_id_property):
+        def mock_setter(_, obj, value):
+            obj.selectors['openai.org/reservation-id'] = value
+
+        def mock_getter(_, obj, obj_type):
+            return obj.selectors.get('openai.org/reservation-id')
+
+        mock_reservation_id_property.__set__ = mock_setter
+        mock_reservation_id_property.__get__ = mock_getter
+
+        nodes = self._spin_up_nodes(3)
+        busy_node = nodes[0]
+        pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
+        reservation = self._create_reservation('test', 1, nodes)
+
+        pending_reservations = self.cluster.assign_nodes_to_reservations(nodes, {busy_node.name: [pod]}, {reservation.id: reservation})
+        self.assertFalse(pending_reservations)
+        self.assertIsNone(busy_node.reservation_id)
+        self.assertTrue({nodes[1].reservation_id, nodes[2].reservation_id} == {reservations.DEFAULT_ID, reservation.id})
 
     def test_scale_down(self):
         """
