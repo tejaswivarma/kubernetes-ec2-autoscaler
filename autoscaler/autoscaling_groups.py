@@ -474,28 +474,29 @@ class AutoScalingGroup(object):
             self.name, num_schedulable))
         return utils.CompletedFuture(False)
 
-    def scale_node_in(self, node):
+    def scale_nodes_in(self, nodes):
         """
         scale down asg by terminating the given node.
         returns a future indicating when the request completes.
         """
-        try:
-            # if we somehow end up in a situation where we have
-            # more capacity than desired capacity, and the desired
-            # capacity is at asg min size, then when we try to
-            # terminate the instance while decrementing the desired
-            # capacity, the aws api call will fail
-            decrement_capacity = self.desired_capacity > self.min_size
-            self.client.terminate_instance_in_auto_scaling_group(
-                InstanceId=node.instance_id,
-                ShouldDecrementDesiredCapacity=decrement_capacity)
-            self.nodes.remove(node)
-            logger.info('Scaled node %s in', node)
-        except botocore.exceptions.ClientError as e:
-            if str(e).find("Terminating instance without replacement will "
-                           "violate group's min size constraint.") == -1:
-                raise e
-            logger.error("Failed to terminate instance: %s", e)
+        for node in nodes:
+            try:
+                # if we somehow end up in a situation where we have
+                # more capacity than desired capacity, and the desired
+                # capacity is at asg min size, then when we try to
+                # terminate the instance while decrementing the desired
+                # capacity, the aws api call will fail
+                decrement_capacity = self.desired_capacity > self.min_size
+                self.client.terminate_instance_in_auto_scaling_group(
+                    InstanceId=node.instance_id,
+                    ShouldDecrementDesiredCapacity=decrement_capacity)
+                self.nodes.remove(node)
+                logger.info('Scaled node %s in', node)
+            except botocore.exceptions.ClientError as e:
+                if str(e).find("Terminating instance without replacement will "
+                               "violate group's min size constraint.") == -1:
+                    raise e
+                logger.error("Failed to terminate instance: %s", e)
 
         return utils.CompletedFuture(None)
 

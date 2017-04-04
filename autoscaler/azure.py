@@ -270,21 +270,29 @@ class AzureVirtualScaleSet(AutoScalingGroup):
 
         return TransformingFuture(True, AllCompletedFuture(futures))
 
-    def terminate_instance(self, vm_id):
-        scale_set_name, instance_id = self.vm_to_instance_id[vm_id]
-        # Update our cached copy of the Scale Set
-        self.scale_sets[scale_set_name].sku.capacity -= 1
-        logger.info('Terminated instance %s', vm_id)
-        # TODO: it would be more efficient to use the bulk delete API, but that would require refactoring the callers
-        return self.client.virtual_machine_scale_set_vms.delete(self.resource_group, scale_set_name, instance_id)
+    def terminate_instances(self, vm_ids):
+        instance_ids = {}
+        for vm_id in vm_ids:
+            scale_set_name, instance_id = self.vm_to_instance_id[vm_id]
+            # Update our cached copy of the Scale Set
+            self.scale_sets[scale_set_name].sku.capacity -= 1
+            instance_ids.setdefault(scale_set_name, []).append(instance_id)
+        logger.info('Terminated instances %s', list(vm_ids))
 
-    def scale_node_in(self, node):
+        futures = []
+        for scale_set_name, ids in instance_ids.items():
+            future = self.client.virtual_machine_scale_sets.delete_instances(self.resource_group, scale_set_name, ids)
+            futures.append(AzureOperationPollerFutureAdapter(future))
+        return AllCompletedFuture(futures)
+
+    def scale_nodes_in(self, nodes):
         """
         scale down asg by terminating the given node.
         returns a future indicating when the request completes.
         """
-        self.nodes.remove(node)
-        return self.terminate_instance(node.instance_id)
+        for node in nodes:
+            self.nodes.remove(node)
+        return self.terminate_instances(node.instance_id for node in nodes)
 
     def __str__(self):
         return 'AzureVirtualScaleSet({name}, {selectors_hash})'.format(name=self.name, selectors_hash=utils.selectors_to_hash(self.selectors))
@@ -342,18 +350,20 @@ class AzureGroup(AutoScalingGroup):
         self.desired_capacity = new_desired_capacity
         return CompletedFuture(True)
 
-    def terminate_instance(self, instance_id):
-        self.client.delete_instances(instance_id)
-        logger.info('Terminated instance %s', instance_id)
+    def terminate_instances(self, instance_ids):
+        for instance_id in instance_ids:
+            self.client.delete_instances(instance_id)
+        logger.info('Terminated instances %s', list(instance_ids))
         return CompletedFuture(None)
 
-    def scale_node_in(self, node):
+    def scale_nodes_in(self, nodes):
         """
         scale down asg by terminating the given node.
         returns a future indicating when the request completes.
         """
-        self.terminate_instance(node.instance_id)
-        self.nodes.remove(node)
+        self.terminate_instances(node.instance_id for node in nodes)
+        for node in nodes:
+            self.nodes.remove(node)
         return CompletedFuture(None)
 
     def __str__(self):

@@ -319,7 +319,7 @@ class Cluster(object):
 
         stats_time = time.time()
 
-        async_operations = []
+        nodes_to_scale_in = {}
         for node in cached_managed_nodes:
             asg = utils.get_group_for_node(asgs, node)
             state = self.get_node_state(
@@ -371,7 +371,7 @@ class Cluster(object):
                     if not asg:
                         logger.warn('Cannot find ASG for node %s. Not terminated.', node)
                     else:
-                        async_operations.append(asg.scale_node_in(node))
+                        nodes_to_scale_in.setdefault(asg, []).append(node)
                 else:
                     logger.info('[Dry run] Would have scaled in %s', node)
             elif state == ClusterNodeState.INSTANCE_TERMINATED:
@@ -385,10 +385,15 @@ class Cluster(object):
             else:
                 raise Exception("Unhandled state: {}".format(state))
 
+        async_operations = []
+        for asg, nodes in nodes_to_scale_in.items():
+            async_operations.append(asg.scale_nodes_in(nodes))
+
         logger.info("++++++++++++++ Maintaining Unmanaged Instances ++++++++++++++++")
         # these are instances that have been running for a while but it's not properly managed
         #   i.e. not having registered to kube or not having proper meta data set
         managed_instance_ids = set(node.instance_id for node in cached_managed_nodes)
+        instances_to_terminate = {}
         for asg in asgs:
             unmanaged_instance_ids = (asg.instance_ids - managed_instance_ids)
             if len(unmanaged_instance_ids) > 0:
@@ -399,7 +404,7 @@ class Cluster(object):
                                 - inst.launch_time).seconds >= (10 * self.instance_init_time):
                             if not self.dry_run:
                                 logger.info("terminating unmanaged %s" % inst)
-                                async_operations.append(asg.terminate_instance(inst_id))
+                                instances_to_terminate.setdefault(asg, []).append(inst_id)
                                 self.stats.increment(
                                     'kubernetes.custom.node.state.unmanaged',
                                     timestamp=stats_time)
@@ -427,6 +432,9 @@ class Cluster(object):
                             else:
                                 logger.info(
                                     '[Dry run] Would have terminated unmanaged %s [%s]', inst, asg.region)
+
+        for asg, instance_ids in instances_to_terminate.items():
+            async_operations.append(asg.terminate_instances(instance_ids))
 
         # Wait for all background scale-in operations to complete
         for operation in async_operations:

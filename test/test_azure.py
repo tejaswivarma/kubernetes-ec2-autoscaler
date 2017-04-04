@@ -40,7 +40,8 @@ class TestCluster(unittest.TestCase):
         mock_client = mock.Mock()
         mock_client.virtual_machine_scale_set_vms = mock.Mock()
         mock_client.virtual_machine_scale_set_vms.list = mock.Mock(return_value=[instance])
-        mock_client.virtual_machine_scale_set_vms.delete = mock.Mock()
+        mock_client.virtual_machine_scale_sets = mock.Mock()
+        mock_client.virtual_machine_scale_sets.delete_instances = mock.Mock()
 
         TestNode = collections.namedtuple('TestNode', ['instance_id', 'unschedulable'])
         test_node = TestNode(instance_id=instance.vm_id, unschedulable=False)
@@ -53,5 +54,5 @@ class TestCluster(unittest.TestCase):
         self.assertEqual(virtual_scale_set.instance_ids, {instance.vm_id})
         self.assertEqual(virtual_scale_set.nodes, [test_node])
 
-        virtual_scale_set.scale_node_in(test_node)
-        mock_client.virtual_machine_scale_set_vms.delete.assert_called_once_with(resource_group, scale_set.name, instance.instance_id)
+        virtual_scale_set.scale_nodes_in([test_node])
+        mock_client.virtual_machine_scale_sets.delete_instances.assert_called_once_with(resource_group, scale_set.name, [instance.instance_id])
