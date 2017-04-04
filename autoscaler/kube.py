@@ -38,6 +38,11 @@ class KubePod(object):
         self.owner = self.labels.get('owner', None)
         self.creation_time = dateutil_parse(metadata['creationTimestamp'])
         self.start_time = dateutil_parse(pod.obj['status']['startTime']) if 'startTime' in pod.obj['status'] else None
+        self.scheduled_time = None
+
+        for condition in pod.obj['status'].get('conditions', []):
+            if condition['type'] == 'PodScheduled' and condition['status'] == 'True':
+                self.scheduled_time = dateutil_parse(condition['lastTransitionTime'])
 
         # TODO: refactor
         requests = [c.get('resources', {}).get('requests', {}) for c in pod.obj['spec']['containers']]
@@ -65,7 +70,8 @@ class KubePod(object):
         determines whether the pod is in a grace period for draining
         this prevents us from draining pods that are too new
         """
-        return not self.start_time or (datetime.datetime.now(self.start_time.tzinfo) - self.start_time) < self._DRAIN_GRACE_PERIOD
+        return (self.scheduled_time and
+                (datetime.datetime.now(self.scheduled_time.tzinfo) - self.scheduled_time) < self._DRAIN_GRACE_PERIOD)
 
     def is_drainable(self):
         return self.is_replicated() and not self.is_critical() and not self.is_in_drain_grace_period()
