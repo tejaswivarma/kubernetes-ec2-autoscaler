@@ -74,7 +74,13 @@ class KubePod(object):
                 (datetime.datetime.now(self.scheduled_time.tzinfo) - self.scheduled_time) < self._DRAIN_GRACE_PERIOD)
 
     def is_drainable(self):
-        return self.is_replicated() and not self.is_critical() and not self.is_in_drain_grace_period()
+        """
+        a pod is considered drainable if:
+        - it's a daemon
+        - it's a non-critical replicated pod that has exceeded grace period
+        """
+        return (self.is_mirrored() or
+                (self.is_replicated() and not self.is_critical() and not self.is_in_drain_grace_period()))
 
     def delete(self):
         logger.info('Deleting Pod %s/%s', self.namespace, self.name)
