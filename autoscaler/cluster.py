@@ -261,7 +261,7 @@ class Cluster(object):
             for pod in pods:
                 fitting = None
                 for node in cached_live_nodes:
-                    if node.can_fit(pod.resources):
+                    if node.is_match(pod) and node.can_fit(pod.resources):
                         fitting = node
                         break
                 if fitting is None:
