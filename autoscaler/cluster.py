@@ -863,6 +863,9 @@ class Cluster(object):
         # unassigned and feasible
         pods_to_schedule = {}
         for pod in pending_unassigned_pods:
+            age = (datetime.datetime.now(pytz.utc) - pod.creation_time).total_seconds()
+            self.stats.histogram('autoscaler.scaling_loop.pending_pod_age', age)
+
             if capacity.is_possible(pod):
                 pods_to_schedule.setdefault(
                     utils.selectors_to_hash(pod.selectors), []).append(pod)
