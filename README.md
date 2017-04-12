@@ -72,30 +72,33 @@ Here is the minimal IAM policy required by the autoscaler:
 ### Credentials
 Once you have an IAM user, you will need its [access key](http://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html).
 The best way to use the access key in Kubernetes is with a [secret](http://kubernetes.io/docs/user-guide/secrets/).
-Here is a sample format for `secret.yaml`:
+Here is a sample [autoscaler-secret.yaml](autoscaler-secret.yaml):
 ```
 apiVersion: v1
 kind: Secret
 metadata:
   name: autoscaler
-  namespace: system
+  namespace: kube-system
 data:
   aws-access-key-id: [base64 encoded access key]
   aws-secret-access-key: [base64 encoded secret access key]
   slack-hook: [optional slack incoming webhook]
 ```
-You can then save it in Kubernetes:
+Create Kubernetes secret:
 ```
-$ kubectl create -f secret.yaml
+$ kubectl create -f autoscaler-secret.yaml
 ```
 
 ### Run
-[scaling-controller.yaml](scaling-controller.yaml) has an example
-[Replication Controller](http://kubernetes.io/docs/user-guide/replication-controller/)
-that will set up Kubernetes to always run exactly one copy of the autoscaler.
-To create the Replication Controller:
+[autoscaler-dep.yaml](autoscaler-dep.yaml) is an example [Deployment](https://kubernetes.io/docs/concepts/workloads/controllers/deployment/) that configures Kubernetes to always run exactly one copy of the 
+autoscaler.
+To create the Deployment:
 ```
-$ kubectl create -f scaling-controller.yaml
+$ kubectl create -f autoscaler-dep.yaml
+```
+To update/replace the Deployment:
+```
+$ kubectl replace -f autoscaler-dep.yaml
 ```
 You should then be able to inspect the pod's status and logs:
 ```

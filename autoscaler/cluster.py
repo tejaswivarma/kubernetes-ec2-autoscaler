@@ -18,13 +18,6 @@ import autoscaler.utils as utils
 # we are interested in all pods, incl. system ones
 pykube.Pod.objects.namespace = None
 
-# HACK: https://github.com/kelproject/pykube/issues/29#issuecomment-230026930
-import backports.ssl_match_hostname
-# Monkey-patch match_hostname with backports's match_hostname, allowing for IP addresses
-# XXX: the exception that this might raise is
-# backports.ssl_match_hostname.CertificateError
-pykube.http.requests.packages.urllib3.connection.match_hostname = backports.ssl_match_hostname.match_hostname
-
 logger = logging.getLogger(__name__)
 
 
