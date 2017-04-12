@@ -1,3 +1,4 @@
+import http
 import logging
 import urllib.parse
 import re
@@ -11,6 +12,7 @@ from dateutil.parser import parse as dateutil_parse
 import requests
 import requests.exceptions
 import pytz
+from msrest.pipeline import ClientRetry
 
 from autoscaler.config import Config
 from autoscaler.autoscaling_groups import AutoScalingGroup
@@ -56,6 +58,53 @@ class AzureOperationPollerFutureAdapter:
                 fn(self)
             else:
                 self._callbacks.append(fn)
+
+
+_RETRY_TIME_LIMIT = 30
+
+
+class AzureBoundedRetry(ClientRetry):
+    """
+    XXX: Azure sometimes sends us a Retry-After: 1200, even when we still have quota, causing our client to appear to hang.
+    Ignore them and just retry after 30secs
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    @staticmethod
+    def from_retry(retry):
+        new_retry = AzureBoundedRetry()
+        new_retry.total = retry.total
+        new_retry.connect = retry.connect
+        new_retry.read = retry.read
+        new_retry.backoff_factor = retry.backoff_factor
+        new_retry.BACKOFF_MAX = retry.BACKOFF_MAX
+        new_retry.status_forcelist = retry.status_forcelist
+        new_retry.method_whitelist = retry.method_whitelist
+
+        return new_retry
+
+    def get_retry_after(self, response):
+        retry_after = super().get_retry_after(response)
+        if response.status != http.HTTPStatus.TOO_MANY_REQUESTS or retry_after <= _RETRY_TIME_LIMIT:
+            return retry_after
+
+        headers = {}
+        for header in ['Retry-After',
+                       'x-ms-ratelimit-remaining-subscription-reads',
+                       'x-ms-ratelimit-remaining-subscription-writes',
+                       'x-ms-ratelimit-remaining-tenant-reads',
+                       'x-ms-ratelimit-remaining-tenant-writes',
+                       'x-ms-ratelimit-remaining-subscription-resource-requests',
+                       'x-ms-ratelimit-remaining-subscription-resource-entities-read',
+                       'x-ms-ratelimit-remaining-tenant-resource-requests',
+                       'x-ms-ratelimit-remaining-tenant-resource-entities-read']:
+            value = response.getheader(header)
+            if value is not None:
+                headers[header] = value
+
+        logger.warn("Azure request throttled: {}".format(headers))
+        return _RETRY_TIME_LIMIT
 
 
 class AzureClient(object):
@@ -158,6 +207,7 @@ class AzureGroups(object):
                 groups.append(group)
         if self.credentials:
             compute_client = ComputeManagementClient(self.credentials, self.subscription_id)
+            compute_client.config.retry_policy.policy = AzureBoundedRetry.from_retry(compute_client.config.retry_policy.policy)
             for resource_group in self.resource_groups:
                 scale_sets_by_type = {}
                 for scale_set in compute_client.virtual_machine_scale_sets.list(resource_group):
