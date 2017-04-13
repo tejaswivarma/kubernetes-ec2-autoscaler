@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 
 class ClusterNodeState(object):
+    DEAD = 'dead'
     INSTANCE_TERMINATED = 'instance-terminated'
     ASG_MIN_SIZE = 'asg-min-size'
     POD_PENDING = 'pod-pending'
@@ -158,6 +159,7 @@ class Cluster(object):
         self.stats.start()
 
         self.dry_run = dry_run
+        self._disable_azure = False
 
     def scale_loop(self):
         """
@@ -393,6 +395,14 @@ class Cluster(object):
                     node.delete()
                 else:
                     logger.info('[Dry run] Would have deleted %s', node)
+            elif state == ClusterNodeState.DEAD:
+                if not self.dry_run:
+                    if not asg:
+                        node.delete()
+                    else:
+                        nodes_to_scale_in.setdefault(asg, []).append(node)
+                else:
+                    logger.info('[Dry run] Would have reaped dead node %s', node)
             elif state == ClusterNodeState.UNDER_UTILIZED_UNDRAINABLE:
                 # noop for now
                 pass
@@ -800,6 +810,9 @@ class Cluster(object):
 
         if node.is_detached():
             return ClusterNodeState.DETACHED
+
+        if node.is_dead():
+            return ClusterNodeState.DEAD
 
         if node.reservation_id in reservations_map and not node.unschedulable:
             # this node is in a reservation

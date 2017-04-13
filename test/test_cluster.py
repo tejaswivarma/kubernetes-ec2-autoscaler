@@ -3,12 +3,14 @@ import json
 import os.path
 import unittest
 import copy
+from datetime import datetime, timedelta
 
 import boto3
 import pykube
 import mock
 import moto
 import yaml
+import pytz
 
 from autoscaler import reservations
 from autoscaler.cluster import Cluster, ClusterNodeState
@@ -29,6 +31,14 @@ class TestCluster(unittest.TestCase):
             self.dummy_rc_pod = yaml.load(f.read())
         with open(os.path.join(dir_path, 'data/node.yaml'), 'r') as f:
             self.dummy_node = yaml.load(f.read())
+            for condition in self.dummy_node['status']['conditions']:
+                if condition['type'] == 'Ready' and condition['status'] == 'True':
+                    condition['lastHeartbeatTime'] = datetime.now(condition['lastHeartbeatTime'].tzinfo)
+            # Convert timestamps to strings to match PyKube
+            for condition in self.dummy_node['status']['conditions']:
+                condition['lastHeartbeatTime'] = datetime.isoformat(condition['lastHeartbeatTime'])
+                condition['lastTransitionTime'] = datetime.isoformat(condition['lastTransitionTime'])
+
 
         # this isn't actually used here
         # only needed to create the KubePod object...
@@ -129,6 +139,30 @@ class TestCluster(unittest.TestCase):
         data['node_selectors'] = '{}'
         data['resources'] = json.dumps({'instances': instances})
         return reservations.Reservation(data, nodes)
+
+    def test_reap_dead_node(self):
+        node = copy.deepcopy(self.dummy_node)
+        TestInstance = collections.namedtuple('TestInstance', ['launch_time'])
+        instance = TestInstance(datetime.now(pytz.utc))
+
+        ready_condition = None
+        for condition in node['status']['conditions']:
+            if condition['type'] == 'Ready':
+                ready_condition = condition
+                break
+        ready_condition['status'] = 'Unknown'
+
+        ready_condition['lastHeartbeatTime'] = datetime.isoformat(datetime.now(pytz.utc) - timedelta(minutes=30))
+        kube_node = KubeNode(pykube.Node(self.api, node))
+        kube_node.delete = mock.Mock(return_value="mocked stuff")
+        self.cluster.maintain([kube_node], {kube_node.instance_id: instance}, {}, [], [], {})
+        kube_node.delete.assert_not_called()
+
+        ready_condition['lastHeartbeatTime'] = datetime.isoformat(datetime.now(pytz.utc) - timedelta(hours=2))
+        kube_node = KubeNode(pykube.Node(self.api, node))
+        kube_node.delete = mock.Mock(return_value="mocked stuff")
+        self.cluster.maintain([kube_node], {kube_node.instance_id: instance}, {}, [], [], {})
+        kube_node.delete.assert_called_once_with()
 
     def test_scale_up_selector(self):
         self.dummy_pod['spec']['nodeSelector'] = {

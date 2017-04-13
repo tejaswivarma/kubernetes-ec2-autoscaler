@@ -108,6 +108,8 @@ def reverse_bytes(value):
     return result
 
 class KubeNode(object):
+    _HEARTBEAT_GRACE_PERIOD = datetime.timedelta(seconds=60*60)
+
     def __init__(self, node):
         self.original = node
         self.pykube_node = node
@@ -120,6 +122,11 @@ class KubeNode(object):
         self.capacity = KubeResource(**node.obj['status']['capacity'])
         self.used_capacity = KubeResource()
         self.creation_time = dateutil_parse(metadata['creationTimestamp'])
+        last_heartbeat_time = self.creation_time
+        for condition in node.obj['status'].get('conditions', []):
+            if condition.get('type') == 'Ready':
+                last_heartbeat_time = dateutil_parse(condition['lastHeartbeatTime'])
+        self.last_heartbeat_time = last_heartbeat_time
 
     def _get_instance_data(self):
         """
@@ -250,6 +257,9 @@ class KubeNode(object):
 
     def is_detached(self):
         return utils.parse_bool_label(self.selectors.get('openai/detached'))
+
+    def is_dead(self):
+        return datetime.datetime.now(self.last_heartbeat_time.tzinfo) - self.last_heartbeat_time > self._HEARTBEAT_GRACE_PERIOD
 
     def __hash__(self):
         return hash(self.name)
