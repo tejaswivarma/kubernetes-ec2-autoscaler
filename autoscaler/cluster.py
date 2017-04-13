@@ -77,7 +77,7 @@ class Cluster(object):
 
     def __init__(self, aws_regions, aws_access_key, aws_secret_key, azure_legacy_regions,
                  azure_client_id, azure_client_secret, azure_subscription_id, azure_tenant_id,
-                 azure_resource_groups, kubeconfig,
+                 azure_resource_group_names, kubeconfig,
                  idle_threshold, type_idle_threshold,
                  instance_init_time, cluster_name, notifier,
                  scale_up=True, maintainance=True,
@@ -106,6 +106,7 @@ class Cluster(object):
             self.session)
 
         azure_regions = []
+        resource_groups = []
         if azure_client_id:
             azure_credentials = ServicePrincipalCredentials(
                 client_id=azure_client_id,
@@ -119,18 +120,20 @@ class Cluster(object):
             resource_client.providers.register('Microsoft.Network')
 
             region_map = {}
-            for resource_group_name in azure_resource_groups:
-                location = resource_client.resource_groups.get(resource_group_name).location
+            for resource_group_name in azure_resource_group_names:
+                resource_group = resource_client.resource_groups.get(resource_group_name)
+                location = resource_group.location
                 if location in region_map:
                     logger.fatal("{} and {} are both in {}. May only have one resource group per region".format(
                         resource_group_name, region_map[location], location
                     ))
                 region_map[location] = resource_group_name
                 azure_regions.append(location)
+                resource_groups.append(resource_group)
         else:
             azure_credentials = None
 
-        self.azure_groups = azure.AzureGroups(azure_legacy_regions, azure_resource_groups, azure_credentials, azure_subscription_id)
+        self.azure_groups = azure.AzureGroups(azure_legacy_regions, resource_groups, azure_credentials, azure_subscription_id)
 
         self.reservation_client = reservations.ReservationClient()
 

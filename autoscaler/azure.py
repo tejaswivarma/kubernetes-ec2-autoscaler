@@ -24,6 +24,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_TAG_VALUE = 'default'
 UNRESERVED_HOST = 'legacy-default-reservation-do-not-use'
+LOCATION_SELECTOR = 'location_selector'
 
 
 # Adapts an Azure async operation to behave like a Future
@@ -210,14 +211,15 @@ class AzureGroups(object):
             compute_client.config.retry_policy.policy = AzureBoundedRetry.from_retry(compute_client.config.retry_policy.policy)
             for resource_group in self.resource_groups:
                 scale_sets_by_type = {}
-                for scale_set in compute_client.virtual_machine_scale_sets.list(resource_group):
+                location_selector = resource_group.tags.get(LOCATION_SELECTOR, resource_group.location)
+                for scale_set in compute_client.virtual_machine_scale_sets.list(resource_group.name):
                     if scale_set.provisioning_state == 'Failed':
                         logger.error("{} failed provisioning. Ignoring it.".format(scale_set.name))
                         continue
                     scale_sets_by_type.setdefault((scale_set.location, scale_set.sku.name), []).append(scale_set)
                 for key, scale_sets in scale_sets_by_type.items():
                     location, instance_type = key
-                    groups.append(AzureVirtualScaleSet(location, resource_group, compute_client, instance_type, scale_sets, kube_nodes))
+                    groups.append(AzureVirtualScaleSet(location, location_selector, resource_group.name, compute_client, instance_type, scale_sets, kube_nodes))
 
         return groups
 
@@ -237,7 +239,7 @@ _SCALE_SET_SIZE_LIMIT = 40
 class AzureVirtualScaleSet(AutoScalingGroup):
     provider = 'azure'
 
-    def __init__(self, region, resource_group, client, instance_type, scale_sets, kube_nodes):
+    def __init__(self, region, region_selector, resource_group, client, instance_type, scale_sets, kube_nodes):
         self.client = client
         self.instance_type = instance_type
         # TODO: Remove this. Legacy value indicating that this node is optimized for compute
@@ -252,7 +254,7 @@ class AzureVirtualScaleSet(AutoScalingGroup):
         self.selectors = dict(self.tags)
         # HACK: for matching node selectors
         self.selectors['azure/type'] = self.instance_type
-        self.selectors['azure/region'] = self.region
+        self.selectors['azure/region'] = region_selector
         self.selectors['azure/class'] = _get_azure_class(self.instance_type)
 
         self.min_size = 0

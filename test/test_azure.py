@@ -20,7 +20,7 @@ class TestCluster(unittest.TestCase):
         instance_type = 'Standard_D1_v2'
         scale_set = VirtualMachineScaleSet(location=region, sku=Sku(name=instance_type, capacity=0))
         scale_set.name = 'test-scale-set'
-        virtual_scale_set = AzureVirtualScaleSet(region, 'test-resource-group', mock_client, instance_type, [scale_set], [])
+        virtual_scale_set = AzureVirtualScaleSet(region, region, 'test-resource-group', mock_client, instance_type, [scale_set], [])
 
         virtual_scale_set.scale(5)
 
@@ -49,7 +49,7 @@ class TestCluster(unittest.TestCase):
         instance_type = 'Standard_D1_v2'
         scale_set = VirtualMachineScaleSet(location=region, sku=Sku(name=instance_type, capacity=0))
         scale_set.name = 'test-scale-set'
-        virtual_scale_set = AzureVirtualScaleSet(region, resource_group, mock_client, instance_type, [scale_set], [test_node])
+        virtual_scale_set = AzureVirtualScaleSet(region, region, resource_group, mock_client, instance_type, [scale_set], [test_node])
 
         self.assertEqual(virtual_scale_set.instance_ids, {instance.vm_id})
         self.assertEqual(virtual_scale_set.nodes, [test_node])
