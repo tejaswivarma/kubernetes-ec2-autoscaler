@@ -153,6 +153,20 @@ class TestCluster(unittest.TestCase):
         self.assertEqual(len(response['AutoScalingGroups']), 1)
         self.assertGreater(response['AutoScalingGroups'][0]['DesiredCapacity'], 0)
 
+    def test_scale_up_for_default_reservation(self):
+        self.dummy_pod['spec']['nodeSelector'] = {
+            'openai.org/reservation-id': reservations.DEFAULT_ID
+        }
+        pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
+        selectors_hash = utils.selectors_to_hash(pod.selectors)
+        asgs = self.cluster.autoscaling_groups.get_all_groups([])
+        self.cluster.autoscaling_timeouts.refresh_timeouts = mock.Mock()
+        self.cluster.scale({selectors_hash: [pod]}, [], asgs, {}, [])
+
+        response = self.asg_client.describe_auto_scaling_groups()
+        self.assertEqual(len(response['AutoScalingGroups']), 1)
+        self.assertGreater(response['AutoScalingGroups'][0]['DesiredCapacity'], 0)
+
     def test_scale_up_for_reservation(self):
         reservation = self._create_reservation('test', 2, [])
         selectors_hash = utils.selectors_to_hash(reservation.node_selectors)

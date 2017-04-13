@@ -267,7 +267,18 @@ class Cluster(object):
                 if fitting is None:
                     # because a pod may be able to fit in multiple groups
                     # pick a group now
-                    pending_pods.setdefault(selectors_hash, []).append(pod)
+                    selectors = dict(pod.selectors)
+                    reservation_id = selectors.get('openai.org/reservation-id')
+                    if reservation_id == reservations.DEFAULT_ID:
+                        # Don't include the reservation id in the selector hash
+                        del selectors['openai.org/reservation-id']
+                    elif reservation_id is not None:
+                        logger.info(
+                            "{pod} is pending for reservation {reservation}".format(
+                                pod=pod, reservation=reservation_id))
+                        # Don't try to scale for this pod, since it's part of a reservation
+                        continue
+                    pending_pods.setdefault(utils.selectors_to_hash(selectors), []).append(pod)
                     logger.info(
                         "{pod} is pending ({selectors_hash})".format(
                             pod=pod, selectors_hash=selectors_hash))
