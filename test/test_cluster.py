@@ -98,7 +98,7 @@ class TestCluster(unittest.TestCase):
             instance_init_time=60,
             type_idle_threshold=60,
             cluster_name='dummy-cluster',
-            notifier=Notifier(),
+            notifier=mock.Mock(),
             dry_run=False
         )
 
@@ -186,6 +186,17 @@ class TestCluster(unittest.TestCase):
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
         self.assertGreater(response['AutoScalingGroups'][0]['DesiredCapacity'], 0)
+
+    def test_scale_up_notification(self):
+        big_pod_spec = copy.deepcopy(self.dummy_pod)
+        for container in big_pod_spec['spec']['containers']:
+            container['resources']['requests']['cpu'] = '100'
+        pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
+        big_pod = KubePod(pykube.Pod(self.api, big_pod_spec))
+        selectors_hash = utils.selectors_to_hash(pod.selectors)
+        asgs = self.cluster.autoscaling_groups.get_all_groups([])
+        self.cluster.fulfill_pending(asgs, selectors_hash, [pod, big_pod], [])
+        self.cluster.notifier.notify_scale.assert_called_with(mock.ANY, mock.ANY, [pod])
 
     def test_scale_up_for_default_reservation(self):
         self.dummy_pod['spec']['nodeSelector'] = {

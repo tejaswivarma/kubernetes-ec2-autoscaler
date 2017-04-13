@@ -595,7 +595,10 @@ class Cluster(object):
 
                 def notify_if_scaled(future):
                     if future.result():
-                        self.notifier.notify_scale(group, units_requested, pods)
+                        flat_assigned_pods = []
+                        for instance_pods in assigned_pods:
+                            flat_assigned_pods.extend(instance_pods)
+                        self.notifier.notify_scale(group, units_requested, flat_assigned_pods)
 
                 async_operation.add_done_callback(notify_if_scaled)
             else:
