@@ -58,7 +58,7 @@ def main(cluster_name, aws_regions, azure_regions, azure_resource_groups, sleep,
          over_provision, instance_init_time, no_scale, no_maintenance,
          slack_hook, slack_bot_token, dry_run, verbose):
     logger_handler = logging.StreamHandler(sys.stderr)
-    logger_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', datefmt='%Y-%m-%dT%H:%M:%S%z'))
     logger.addHandler(logger_handler)
     logger.setLevel(DEBUG_LOGGING_MAP.get(verbose, logging.CRITICAL))
 
