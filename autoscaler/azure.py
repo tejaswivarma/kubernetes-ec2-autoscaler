@@ -323,13 +323,14 @@ class AzureVirtualScaleSet(AutoScalingGroup):
         return TransformingFuture(True, AllCompletedFuture(futures))
 
     def terminate_instances(self, vm_ids):
+        vm_ids = list(vm_ids)
         instance_ids = {}
         for vm_id in vm_ids:
             scale_set_name, instance_id = self.vm_to_instance_id[vm_id]
             # Update our cached copy of the Scale Set
             self.scale_sets[scale_set_name].sku.capacity -= 1
             instance_ids.setdefault(scale_set_name, []).append(instance_id)
-        logger.info('Terminated instances %s', list(vm_ids))
+        logger.info('Terminated instances %s', vm_ids)
 
         futures = []
         for scale_set_name, ids in instance_ids.items():
@@ -403,9 +404,10 @@ class AzureGroup(AutoScalingGroup):
         return CompletedFuture(True)
 
     def terminate_instances(self, instance_ids):
+        instance_ids = list(instance_ids)
         for instance_id in instance_ids:
             self.client.delete_instances(instance_id)
-        logger.info('Terminated instances %s', list(instance_ids))
+        logger.info('Terminated instances %s', instance_ids)
         return CompletedFuture(None)
 
     def scale_nodes_in(self, nodes):
