@@ -260,7 +260,7 @@ class TestCluster(unittest.TestCase):
 
         self.cluster.idle_threshold = -1
         self.cluster.type_idle_threshold = -1
-        self.cluster.LAUNCH_HOUR_THRESHOLD = -1
+        self.cluster.LAUNCH_HOUR_THRESHOLD['aws'] = -1
         self.cluster.maintain(
             managed_nodes, running_insts_map,
             pods_to_schedule, running_or_pending_assigned_pods, asgs,
@@ -287,6 +287,7 @@ class TestCluster(unittest.TestCase):
 
         self.cluster.idle_threshold = -1
         self.cluster.type_idle_threshold = -1
+        self.cluster.LAUNCH_HOUR_THRESHOLD['aws'] = 60*30
         self.cluster.maintain(
             managed_nodes, running_insts_map,
             pods_to_schedule, running_or_pending_assigned_pods, asgs,
@@ -395,7 +396,7 @@ class TestCluster(unittest.TestCase):
         # make sure we're not on grace period
         self.cluster.idle_threshold = -1
         self.cluster.type_idle_threshold = -1
-        self.cluster.LAUNCH_HOUR_THRESHOLD = -1
+        self.cluster.LAUNCH_HOUR_THRESHOLD['aws'] = -1
 
         for pods in pod_scenarios:
             state = self.cluster.get_node_state(
@@ -433,7 +434,7 @@ class TestCluster(unittest.TestCase):
         # make sure we're not on grace period
         self.cluster.idle_threshold = -1
         self.cluster.type_idle_threshold = -1
-        self.cluster.LAUNCH_HOUR_THRESHOLD = -1
+        self.cluster.LAUNCH_HOUR_THRESHOLD['aws'] = -1
 
         state = self.cluster.get_node_state(
             node, asgs[0], pods, pods_to_schedule,
