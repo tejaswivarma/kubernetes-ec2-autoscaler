@@ -47,7 +47,7 @@ class TestCluster(unittest.TestCase):
         test_node = TestNode(instance_id=instance.vm_id, unschedulable=False)
 
         instance_type = 'Standard_D1_v2'
-        scale_set = VirtualMachineScaleSet(location=region, sku=Sku(name=instance_type, capacity=0))
+        scale_set = VirtualMachineScaleSet(location=region, sku=Sku(name=instance_type, capacity=1))
         scale_set.name = 'test-scale-set'
         virtual_scale_set = AzureVirtualScaleSet(region, region, resource_group, mock_client, instance_type, [scale_set], [test_node])
 

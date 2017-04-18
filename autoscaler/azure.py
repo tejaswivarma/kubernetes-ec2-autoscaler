@@ -264,6 +264,8 @@ class AzureVirtualScaleSet(AutoScalingGroup):
         self.vm_to_instance_id = {}
         self.instances = {}
         for scale_set in scale_sets:
+            if scale_set.sku.capacity == 0:
+                continue
             for instance in self.client.virtual_machine_scale_set_vms.list(self.resource_group, scale_set.name, expand="instanceView"):
                 self.vm_to_instance_id[instance.vm_id] = (scale_set.name, instance.instance_id)
                 launch_time = datetime.now(pytz.utc)
