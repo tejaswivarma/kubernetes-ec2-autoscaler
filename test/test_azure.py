@@ -6,6 +6,7 @@ from azure.mgmt.compute.models import VirtualMachineScaleSet, Sku, VirtualMachin
     VirtualMachineInstanceView
 
 from autoscaler.azure import AzureVirtualScaleSet
+from autoscaler.azure_api import AzureScaleSet, AzureWrapper
 
 
 class TestCluster(unittest.TestCase):
@@ -18,9 +19,10 @@ class TestCluster(unittest.TestCase):
         mock_client.virtual_machine_scale_sets.create_or_update = mock.Mock()
 
         instance_type = 'Standard_D1_v2'
-        scale_set = VirtualMachineScaleSet(location=region, sku=Sku(name=instance_type, capacity=0))
-        scale_set.name = 'test-scale-set'
-        virtual_scale_set = AzureVirtualScaleSet(region, region, 'test-resource-group', mock_client, instance_type, [scale_set], [])
+        resource_group = 'test-resource-group'
+        scale_set = AzureScaleSet(region, resource_group, 'test-scale-set', instance_type, 0, 'Succeeded')
+
+        virtual_scale_set = AzureVirtualScaleSet(region, region, resource_group, AzureWrapper(mock_client), instance_type, [scale_set], [])
 
         virtual_scale_set.scale(5)
 
@@ -47,9 +49,9 @@ class TestCluster(unittest.TestCase):
         test_node = TestNode(instance_id=instance.vm_id, unschedulable=False)
 
         instance_type = 'Standard_D1_v2'
-        scale_set = VirtualMachineScaleSet(location=region, sku=Sku(name=instance_type, capacity=1))
-        scale_set.name = 'test-scale-set'
-        virtual_scale_set = AzureVirtualScaleSet(region, region, resource_group, mock_client, instance_type, [scale_set], [test_node])
+        scale_set = AzureScaleSet(region, resource_group, 'test-scale-set', instance_type, 1, 'Succeeded')
+
+        virtual_scale_set = AzureVirtualScaleSet(region, region, resource_group, AzureWrapper(mock_client), instance_type, [scale_set], [test_node])
 
         self.assertEqual(virtual_scale_set.instance_ids, {instance.vm_id})
         self.assertEqual(virtual_scale_set.nodes, [test_node])

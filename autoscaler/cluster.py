@@ -9,7 +9,7 @@ import boto3
 import botocore.exceptions
 import datadog
 import pykube
-import pytz
+from azure.mgmt.compute import ComputeManagementClient
 
 from dateutil.parser import parse as dateutil_parse
 
@@ -18,7 +18,9 @@ from azure.common.credentials import ServicePrincipalCredentials
 from msrestazure.azure_exceptions import CloudError
 
 import autoscaler.autoscaling_groups as autoscaling_groups
+import autoscaler.azure
 import autoscaler.azure as azure
+from autoscaler.azure_api import AzureWriteThroughCachedApi, AzureWrapper
 import autoscaler.capacity as capacity
 from autoscaler.kube import KubePod, KubeNode, KubeResource, KubePodStatus
 import autoscaler.reservations as reservations
@@ -111,6 +113,7 @@ class Cluster(object):
 
         azure_regions = []
         resource_groups = []
+        self.azure_client = None
         if azure_client_id:
             azure_credentials = ServicePrincipalCredentials(
                 client_id=azure_client_id,
@@ -134,14 +137,17 @@ class Cluster(object):
                 region_map[location] = resource_group_name
                 azure_regions.append(location)
                 resource_groups.append(resource_group)
-        else:
-            azure_credentials = None
 
-        self.azure_groups = azure.AzureGroups(azure_legacy_regions, resource_groups, azure_credentials, azure_subscription_id)
+            compute_client = ComputeManagementClient(azure_credentials, azure_subscription_id)
+            compute_client.config.retry_policy.policy = azure.AzureBoundedRetry.from_retry(compute_client.config.retry_policy.policy)
+            self.azure_client = AzureWriteThroughCachedApi(AzureWrapper(compute_client))
+
+        self.azure_groups = azure.AzureGroups(azure_legacy_regions, resource_groups, self.azure_client)
 
         self.reservation_client = reservations.ReservationClient()
 
         # config
+        self.azure_resource_group_names = azure_resource_group_names
         self.azure_regions = azure_regions
         self.azure_legacy_regions = azure_legacy_regions
         self.aws_regions = aws_regions
@@ -199,6 +205,11 @@ class Cluster(object):
             self.stats.gauge('autoscaler.scaling_loop.kube_lookup_time', time.time() - kube_lookup_start_time)
 
             scaling_group_lookup_start_time = time.time()
+            if self.azure_client is not None:
+                for resource_group in self.azure_resource_group_names:
+                    # Force a refresh of the cache to pick up any new Scale Sets that have been created
+                    # or modified externally.
+                    self.azure_client.list_scale_sets(resource_group, force_refresh=True)
             asgs = self.autoscaling_groups.get_all_groups(all_nodes)
             azure_groups = self.azure_groups.get_all_groups(all_nodes)
             scaling_groups = asgs + azure_groups
@@ -689,7 +700,7 @@ class Cluster(object):
                 self._disable_azure = True
                 logger.warn('Disabling Azure for loop')
 
-            instances = [azure.AzureInstance(inst_data['id'], inst_data['instance_type'], dateutil_parse(inst_data['launch_time']), inst_data['tags'])
+            instances = [autoscaler.azure.AzureInstance(inst_data['id'], inst_data['instance_type'], dateutil_parse(inst_data['launch_time']), inst_data['tags'])
                          for inst_data in instances_data.get('instances', [])]
             instance_map.update((inst.id, inst) for inst in instances)
 

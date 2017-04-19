@@ -1,5 +1,6 @@
 import json
 import re
+from abc import ABC
 
 from threading import Lock
 
@@ -19,7 +20,15 @@ class CountDownCallback:
         self._lock.release()
 
 
-class CompletedFuture:
+class Future(ABC):
+    def result(self):
+        pass
+
+    def add_done_callback(self, fn):
+        pass
+
+
+class CompletedFuture(Future):
     def __init__(self, value):
         self._value = value
 
@@ -30,7 +39,7 @@ class CompletedFuture:
         fn(self)
 
 
-class TransformingFuture:
+class TransformingFuture(Future):
     def __init__(self, value, delegate):
         self._value = value
         self._delegate = delegate
@@ -43,7 +52,7 @@ class TransformingFuture:
         self._delegate.add_done_callback(lambda _: fn(self))
 
 
-class AllCompletedFuture:
+class AllCompletedFuture(Future):
     def __init__(self, futures):
         self._futures = futures
 

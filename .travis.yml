@@ -5,5 +5,5 @@ install:
   - "pip install -r requirements.txt"
   - "mkdir -p ~/.kube"
   - "ln -s $PWD/test/data/kube_config.yaml ~/.kube/config"
-script: "nosetests test/"
+script: "nosetests test/ && mypy --ignore-missing-imports autoscaler/azure_api.py"
 cache: pip

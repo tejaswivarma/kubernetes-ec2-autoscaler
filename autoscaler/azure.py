@@ -1,64 +1,26 @@
 import http
 import logging
 import urllib.parse
-import re
-from datetime import datetime
-from threading import Condition
+from typing import List, Tuple, MutableMapping
 
-from azure.mgmt.compute.models import Sku
-from azure.mgmt.compute.models import VirtualMachineScaleSet
-from azure.mgmt.compute import ComputeManagementClient
-from dateutil.parser import parse as dateutil_parse
+import re
 import requests
 import requests.exceptions
-import pytz
+from dateutil.parser import parse as dateutil_parse
 from msrest.pipeline import ClientRetry
 
-from autoscaler.config import Config
-from autoscaler.autoscaling_groups import AutoScalingGroup
-from autoscaler.utils import TransformingFuture, AllCompletedFuture, CompletedFuture
 import autoscaler.errors as errors
 import autoscaler.utils as utils
+from autoscaler.autoscaling_groups import AutoScalingGroup
+from autoscaler.azure_api import AzureApi, AzureScaleSet, AzureScaleSetInstance
+from autoscaler.config import Config
+from autoscaler.utils import TransformingFuture, AllCompletedFuture, CompletedFuture
 
 logger = logging.getLogger(__name__)
 
 _DEFAULT_TAG_VALUE = 'default'
 UNRESERVED_HOST = 'legacy-default-reservation-do-not-use'
 LOCATION_SELECTOR = 'location_selector'
-
-
-# Adapts an Azure async operation to behave like a Future
-class AzureOperationPollerFutureAdapter:
-    def __init__(self, azure_operation):
-        self._result = None
-        # NOTE: All this complexity with a Condition is here because AzureOperationPoller is not reentrant,
-        # so a callback added with add_done_callback() could not call result(), if we delegated everything
-        self._condition = Condition()
-        self._callbacks = []
-        azure_operation.add_done_callback(self._handle_completion)
-
-    def _handle_completion(self, result):
-        with self._condition:
-            self._result = result
-            self._condition.notifyAll()
-            callbacks = self._callbacks
-            self._callbacks.clear()
-
-        for callback in callbacks:
-            callback(self)
-
-    def result(self):
-        with self._condition:
-            if self._result is None:
-                self._condition.wait()
-            return self._result
-
-    def add_done_callback(self, fn):
-        with self._condition:
-            if self._result is not None:
-                fn(self)
-            else:
-                self._callbacks.append(fn)
 
 
 _RETRY_TIME_LIMIT = 30
@@ -176,11 +138,10 @@ class AzureClient(object):
 
 
 class AzureGroups(object):
-    def __init__(self, legacy_regions, resource_groups, credentials, subscription_id):
+    def __init__(self, legacy_regions, resource_groups, client: AzureApi):
         self.legacy_regions = legacy_regions
         self.resource_groups = resource_groups
-        self.credentials = credentials
-        self.subscription_id = subscription_id
+        self.client = client
 
     def get_all_groups(self, kube_nodes):
 
@@ -206,20 +167,19 @@ class AzureGroups(object):
                     tags[tag] = _DEFAULT_TAG_VALUE
                 group = AzureGroup(client, instance_type, tags, group_instances, kube_nodes)
                 groups.append(group)
-        if self.credentials:
-            compute_client = ComputeManagementClient(self.credentials, self.subscription_id)
-            compute_client.config.retry_policy.policy = AzureBoundedRetry.from_retry(compute_client.config.retry_policy.policy)
+
+        if self.client:
             for resource_group in self.resource_groups:
                 scale_sets_by_type = {}
                 location_selector = resource_group.tags.get(LOCATION_SELECTOR, resource_group.location)
-                for scale_set in compute_client.virtual_machine_scale_sets.list(resource_group.name):
+                for scale_set in self.client.list_scale_sets(resource_group.name):
                     if scale_set.provisioning_state == 'Failed':
                         logger.error("{} failed provisioning. Ignoring it.".format(scale_set.name))
                         continue
-                    scale_sets_by_type.setdefault((scale_set.location, scale_set.sku.name), []).append(scale_set)
+                    scale_sets_by_type.setdefault((scale_set.location, scale_set.instance_type), []).append(scale_set)
                 for key, scale_sets in scale_sets_by_type.items():
                     location, instance_type = key
-                    groups.append(AzureVirtualScaleSet(location, location_selector, resource_group.name, compute_client, instance_type, scale_sets, kube_nodes))
+                    groups.append(AzureVirtualScaleSet(location, location_selector, resource_group.name, self.client, instance_type, scale_sets, kube_nodes))
 
         return groups
 
@@ -239,14 +199,14 @@ _SCALE_SET_SIZE_LIMIT = 40
 class AzureVirtualScaleSet(AutoScalingGroup):
     provider = 'azure'
 
-    def __init__(self, region, region_selector, resource_group, client, instance_type, scale_sets, kube_nodes):
+    def __init__(self, region, region_selector, resource_group, client: AzureApi, instance_type, scale_sets: List[AzureScaleSet], kube_nodes):
         self.client = client
         self.instance_type = instance_type
         # TODO: Remove this. Legacy value indicating that this node is optimized for compute
         self.tags = {'openai/computing': 'true'}
         self.name = 'virtual_scale_set_' + instance_type + '_' + region + '_' + resource_group
         self.scale_sets = dict((scale_set.name, scale_set) for scale_set in scale_sets)
-        self.desired_capacity = sum(scale_set.sku.capacity for scale_set in scale_sets)
+        self.desired_capacity = sum(scale_set.capacity for scale_set in scale_sets)
 
         self.region = region
         self.resource_group = resource_group
@@ -261,21 +221,16 @@ class AzureVirtualScaleSet(AutoScalingGroup):
         self.max_size = 1000
         self.is_spot = False
 
-        self.vm_to_instance_id = {}
+        self.vm_id_to_instance: MutableMapping[str, Tuple[str, AzureScaleSetInstance]] = {}
         self.instances = {}
         for scale_set in scale_sets:
-            if scale_set.sku.capacity == 0:
+            if scale_set.capacity == 0:
                 continue
-            for instance in self.client.virtual_machine_scale_set_vms.list(self.resource_group, scale_set.name, expand="instanceView"):
-                self.vm_to_instance_id[instance.vm_id] = (scale_set.name, instance.instance_id)
-                launch_time = datetime.now(pytz.utc)
-                for status in instance.instance_view.statuses:
-                    if status.code == 'ProvisioningState/succeeded':
-                        launch_time = status.time
-                        break
-                self.instances[instance.vm_id] = AzureInstance(instance.vm_id, self.instance_type, launch_time, self.tags)
+            for instance in self.client.list_scale_set_instances(scale_set):
+                self.vm_id_to_instance[instance.vm_id] = (scale_set.name, instance)
+                self.instances[instance.vm_id] = AzureInstance(instance.vm_id, self.instance_type, instance.launch_time, self.tags)
 
-        self.nodes = [node for node in kube_nodes if node.instance_id in self.vm_to_instance_id]
+        self.nodes = [node for node in kube_nodes if node.instance_id in self.vm_id_to_instance]
         self.unschedulable_nodes = [n for n in self.nodes if n.unschedulable]
 
         self._id = (self.region, self.name)
@@ -285,7 +240,7 @@ class AzureVirtualScaleSet(AutoScalingGroup):
 
     @property
     def instance_ids(self):
-        return self.vm_to_instance_id.keys()
+        return self.vm_id_to_instance.keys()
 
     def set_desired_capacity(self, new_desired_capacity):
         """
@@ -300,18 +255,15 @@ class AzureVirtualScaleSet(AutoScalingGroup):
 
         futures = []
         for scale_set in self.scale_sets.values():
-            if scale_set.sku.capacity < _SCALE_SET_SIZE_LIMIT:
-                new_group_capacity = min(_SCALE_SET_SIZE_LIMIT, scale_set.sku.capacity + scale_out)
-                scale_out -= (new_group_capacity - scale_set.sku.capacity)
+            if scale_set.capacity < _SCALE_SET_SIZE_LIMIT:
+                new_group_capacity = min(_SCALE_SET_SIZE_LIMIT, scale_set.capacity + scale_out)
+                scale_out -= (new_group_capacity - scale_set.capacity)
                 # Update our cached version
-                self.scale_sets[scale_set.name].sku.capacity = new_group_capacity
+                self.scale_sets[scale_set.name].capacity = new_group_capacity
                 if scale_set.provisioning_state == 'Updating':
                     logger.warn("Update of {} already in progress".format(scale_set.name))
                     continue
-                parameters = VirtualMachineScaleSet(self.region, sku=Sku(name=self.instance_type, capacity=new_group_capacity))
-                azure_op = self.client.virtual_machine_scale_sets.create_or_update(self.resource_group, scale_set.name,
-                                                                                   parameters=parameters)
-                futures.append(AzureOperationPollerFutureAdapter(azure_op))
+                futures.append(self.client.update_scale_set(scale_set, new_group_capacity))
                 logger.info("Scaling Azure Scale Set {} to {}".format(scale_set.name, new_group_capacity))
             if scale_out == 0:
                 break
@@ -326,18 +278,17 @@ class AzureVirtualScaleSet(AutoScalingGroup):
 
     def terminate_instances(self, vm_ids):
         vm_ids = list(vm_ids)
-        instance_ids = {}
+        instances = {}
         for vm_id in vm_ids:
-            scale_set_name, instance_id = self.vm_to_instance_id[vm_id]
+            scale_set_name, instance = self.vm_id_to_instance[vm_id]
             # Update our cached copy of the Scale Set
-            self.scale_sets[scale_set_name].sku.capacity -= 1
-            instance_ids.setdefault(scale_set_name, []).append(instance_id)
+            self.scale_sets[scale_set_name].capacity -= 1
+            instances.setdefault(scale_set_name, []).append(instance)
         logger.info('Terminated instances %s', vm_ids)
 
         futures = []
-        for scale_set_name, ids in instance_ids.items():
-            future = self.client.virtual_machine_scale_sets.delete_instances(self.resource_group, scale_set_name, ids)
-            futures.append(AzureOperationPollerFutureAdapter(future))
+        for scale_set_name, scale_set_instances in instances.items():
+            futures.append(self.client.terminate_scale_set_instances(self.scale_sets[scale_set_name], scale_set_instances))
         return AllCompletedFuture(futures)
 
     def scale_nodes_in(self, nodes):
