@@ -175,16 +175,23 @@ class AzureWriteThroughCachedApi(AzureApi):
 # Adapts an Azure async operation to behave like a Future
 class AzureOperationPollerFutureAdapter(Future):
     def __init__(self, azure_operation):
+        self._done = False
         self._result = None
+        self._exception = None
         # NOTE: All this complexity with a Condition is here because AzureOperationPoller is not reentrant,
         # so a callback added with add_done_callback() could not call result(), if we delegated everything
         self._condition = Condition()
         self._callbacks = []
+        self.azure_operation = azure_operation
         azure_operation.add_done_callback(self._handle_completion)
 
     def _handle_completion(self, result):
         with self._condition:
-            self._result = result
+            self._done = True
+            if self.azure_operation._exception is None:
+                self._result = result
+            else:
+                self._exception = self.azure_operation._exception
             self._condition.notifyAll()
             callbacks = self._callbacks
             self._callbacks.clear()
@@ -194,13 +201,15 @@ class AzureOperationPollerFutureAdapter(Future):
 
     def result(self):
         with self._condition:
-            if self._result is None:
+            if not self._done:
                 self._condition.wait()
+            if self._exception:
+                raise self._exception
             return self._result
 
     def add_done_callback(self, fn):
         with self._condition:
-            if self._result is not None:
+            if self._done:
                 fn(self)
             else:
                 self._callbacks.append(fn)
