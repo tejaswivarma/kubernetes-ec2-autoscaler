@@ -2,6 +2,7 @@ import http
 import logging
 import urllib.parse
 from typing import List, Tuple, MutableMapping
+from datetime import datetime
 
 import re
 import requests
@@ -223,7 +224,13 @@ class AzureVirtualScaleSet(AutoScalingGroup):
 
         self.vm_id_to_instance: MutableMapping[str, Tuple[str, AzureScaleSetInstance]] = {}
         self.instances = {}
+        self.timeout_until = None
+        self.timeout_reason = None
         for scale_set in scale_sets:
+            if scale_set.timeout_until is not None:
+                if self.timeout_until is None or self.timeout_until < scale_set.timeout_until:
+                    self.timeout_until = scale_set.timeout_until
+                    self.timeout_reason = scale_set.name + ": " + scale_set.timeout_reason
             if scale_set.capacity == 0:
                 continue
             for instance in self.client.list_scale_set_instances(scale_set):
@@ -234,6 +241,12 @@ class AzureVirtualScaleSet(AutoScalingGroup):
         self.unschedulable_nodes = [n for n in self.nodes if n.unschedulable]
 
         self._id = (self.region, self.name)
+
+    def is_timed_out(self):
+        if self.timeout_until and datetime.now(self.timeout_until.tzinfo) < self.timeout_until:
+            logger.warn("{} is timed out until {} because {}".format(self._id, self.timeout_until, self.timeout_reason))
+            return True
+        return False
 
     def get_azure_instances(self):
         return self.instances.values()

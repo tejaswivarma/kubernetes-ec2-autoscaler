@@ -1,6 +1,10 @@
 import logging
+import json
+
+from azure.monitor import MonitorClient
+from azure.monitor.models import EventData
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timedelta
 from threading import RLock, Condition
 from typing import List, Tuple, MutableMapping
 
@@ -16,13 +20,15 @@ logger = logging.getLogger(__name__)
 
 class AzureScaleSet:
     def __init__(self, location: str, resource_group: str, name: str, instance_type: str, capacity: int,
-                 provisioning_state: str) -> None:
+                 provisioning_state: str, timeout_until: datetime = None, timeout_reason: str = None) -> None:
         self.name = name
         self.instance_type = instance_type
         self.capacity = capacity
         self.provisioning_state = provisioning_state
         self.resource_group = resource_group
         self.location = location
+        self.timeout_until = timeout_until
+        self.timeout_reason = timeout_reason
 
     def __str__(self):
         return 'AzureScaleSet({}, {}, {}, {})'.format(self.name, self.instance_type, self.capacity, self.provisioning_state)
@@ -31,7 +37,7 @@ class AzureScaleSet:
         return str(self)
 
     def _key(self):
-        return (self.name, self.instance_type, self.capacity, self.provisioning_state, self.resource_group, self.location)
+        return (self.name, self.instance_type, self.capacity, self.provisioning_state, self.resource_group, self.location, self.timeout_until, self.timeout_reason)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, AzureScaleSet):
@@ -80,20 +86,49 @@ class AzureApi(ABC):
         pass
 
 
+TIMEOUT_PERIOD = timedelta(minutes=15)
+
+
 class AzureWrapper(AzureApi):
-    def __init__(self, client: ComputeManagementClient) -> None:
-        self._client = client
+    def __init__(self, compute_client: ComputeManagementClient, monitor_client: MonitorClient) -> None:
+        self._compute_client = compute_client
+        self._monitor_client = monitor_client
 
     def list_scale_sets(self, resource_group_name: str) -> List[AzureScaleSet]:
+        fifteen_minutes_ago = datetime.now(pytz.utc) - TIMEOUT_PERIOD
+        filter_clause = "eventTimestamp ge '{}' and resourceGroupName eq '{}'".format(fifteen_minutes_ago, resource_group_name)
+        select_clause = "status,subStatus,properties,resourceId,eventTimestamp"
+
+        failures_by_scale_set: MutableMapping[str, List[EventData]] = {}
+        for log in self._monitor_client.activity_logs.list(filter=filter_clause, select=select_clause):
+            if (log.status and log.status.value == 'Failed') or (log.properties and log.properties.get('statusCode') == 'Conflict'):
+                failures_by_scale_set.setdefault(log.resource_id, []).append(log)
+
         result = []
-        for scale_set in self._client.virtual_machine_scale_sets.list(resource_group_name):
+        for scale_set in self._compute_client.virtual_machine_scale_sets.list(resource_group_name):
+            failures = sorted(failures_by_scale_set.get(scale_set.id, []), key=lambda x: x.event_timestamp, reverse=True)
+            timeout_until = None
+            timeout_reason = None
+            for failure in failures:
+                status_message = json.loads(failure.properties.get('statusMessage', "{}")) if failure.properties else {}
+                error_details = status_message.get('error', {})
+                if 'message' in error_details:
+                    timeout_until = failure.event_timestamp + TIMEOUT_PERIOD
+                    timeout_reason = error_details['message']
+                    # Stop if we found a message with details
+                    break
+                if timeout_until is None:
+                    timeout_until = failure.event_timestamp + TIMEOUT_PERIOD
+                    timeout_reason = failure.sub_status.localized_value
+
             result.append(AzureScaleSet(scale_set.location, resource_group_name, scale_set.name, scale_set.sku.name,
-                                        scale_set.sku.capacity, scale_set.provisioning_state))
+                                        scale_set.sku.capacity, scale_set.provisioning_state, timeout_until=timeout_until,
+                                        timeout_reason=timeout_reason))
         return result
 
     def list_scale_set_instances(self, scale_set: AzureScaleSet) -> List[AzureScaleSetInstance]:
         result = []
-        for instance in self._client.virtual_machine_scale_set_vms.list(scale_set.resource_group, scale_set.name, expand="instanceView"):
+        for instance in self._compute_client.virtual_machine_scale_set_vms.list(scale_set.resource_group, scale_set.name, expand="instanceView"):
             launch_time = datetime.now(pytz.utc)
             for status in instance.instance_view.statuses:
                 if status.code == 'ProvisioningState/succeeded':
@@ -104,12 +139,12 @@ class AzureWrapper(AzureApi):
 
     def update_scale_set(self, scale_set: AzureScaleSet, new_capacity: int) -> Future:
         parameters = VirtualMachineScaleSet(scale_set.location, sku=Sku(name=scale_set.instance_type, capacity=new_capacity))
-        azure_op = self._client.virtual_machine_scale_sets.create_or_update(scale_set.resource_group, scale_set.name,
-                                                                            parameters=parameters)
+        azure_op = self._compute_client.virtual_machine_scale_sets.create_or_update(scale_set.resource_group, scale_set.name,
+                                                                                    parameters=parameters)
         return AzureOperationPollerFutureAdapter(azure_op)
 
     def terminate_scale_set_instances(self, scale_set: AzureScaleSet, instances: List[AzureScaleSetInstance]) -> Future:
-        future = self._client.virtual_machine_scale_sets.delete_instances(scale_set.resource_group, scale_set.name, [instance.instance_id for instance in instances])
+        future = self._compute_client.virtual_machine_scale_sets.delete_instances(scale_set.resource_group, scale_set.name, [instance.instance_id for instance in instances])
         return AzureOperationPollerFutureAdapter(future)
 
 

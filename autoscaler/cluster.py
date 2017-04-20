@@ -10,6 +10,7 @@ import botocore.exceptions
 import datadog
 import pykube
 from azure.mgmt.compute import ComputeManagementClient
+from azure.monitor import MonitorClient
 
 from dateutil.parser import parse as dateutil_parse
 
@@ -125,6 +126,7 @@ class Cluster(object):
             resource_client = ResourceManagementClient(azure_credentials, azure_subscription_id)
             resource_client.providers.register('Microsoft.Compute')
             resource_client.providers.register('Microsoft.Network')
+            resource_client.providers.register('Microsoft.Insights')
 
             region_map = {}
             for resource_group_name in azure_resource_group_names:
@@ -140,7 +142,10 @@ class Cluster(object):
 
             compute_client = ComputeManagementClient(azure_credentials, azure_subscription_id)
             compute_client.config.retry_policy.policy = azure.AzureBoundedRetry.from_retry(compute_client.config.retry_policy.policy)
-            self.azure_client = AzureWriteThroughCachedApi(AzureWrapper(compute_client))
+
+            monitor_client = MonitorClient(azure_credentials, azure_subscription_id)
+            monitor_client.config.retry_policy.policy = azure.AzureBoundedRetry.from_retry(monitor_client.config.retry_policy.policy)
+            self.azure_client = AzureWriteThroughCachedApi(AzureWrapper(compute_client, monitor_client))
 
         self.azure_groups = azure.AzureGroups(azure_legacy_regions, resource_groups, self.azure_client)
 
@@ -588,7 +593,7 @@ class Cluster(object):
             units_needed = len(new_instance_resources)
             units_needed += self.over_provision
 
-            if self.autoscaling_timeouts.is_timed_out(group):
+            if self.autoscaling_timeouts.is_timed_out(group) or group.is_timed_out():
                 # if a machine is timed out, it cannot be scaled further
                 # just account for its current capacity (it may have more
                 # being launched, but we're being conservative)

@@ -2,8 +2,12 @@ import unittest
 import mock
 from datetime import datetime
 
+import pytz
+from azure.mgmt.compute.models import VirtualMachineScaleSet, Sku
+from azure.monitor.models import EventData, LocalizableString
+
 from autoscaler.azure_api import AzureApi, AzureScaleSet, AzureWriteThroughCachedApi, \
-    AzureScaleSetInstance
+    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD
 from autoscaler.utils import CompletedFuture
 
 
@@ -170,3 +174,38 @@ class TestWriteThroughCache(unittest.TestCase):
         self.assertEqual(cached_api.list_scale_set_instances(updated_scale_set), [])
         mock_api.list_scale_sets.assert_called_once_with('test_rg')
         mock_api.list_scale_set_instances.assert_called_once_with(updated_scale_set)
+
+
+class TestWrapper(unittest.TestCase):
+    def test_out_of_quota(self):
+        scale_set = VirtualMachineScaleSet('eastus', {}, sku=Sku('Standard_H16', capacity=1))
+        scale_set.name = 'test'
+        scale_set.provisioning_state = 'Succeeded'
+        scale_set.id = 'fake_id'
+
+        compute_client = mock.Mock()
+        compute_client.virtual_machine_scale_sets = mock.Mock()
+        compute_client.virtual_machine_scale_sets.list = mock.Mock(return_value=[scale_set])
+
+        reason = "Operation results in exceeding quota limits of Core. Maximum allowed: 800, Current in use: 784, Additional requested: 320."
+        message = "{\"error\":{\"code\":\"OperationNotAllowed\",\"message\":\"" + reason + "\"}}"
+        monitor_client = mock.Mock()
+        monitor_client.activity_logs = mock.Mock()
+        now = datetime.now(pytz.utc)
+        monitor_client.activity_logs.list = mock.Mock(return_value=[EventData('Error',
+                                                                              now,
+                                                                              now,
+                                                                              resource_id=scale_set.id,
+                                                                              status=LocalizableString('Failed'),
+                                                                              properties={'statusCode': 'Conflict',
+                                                                                          'statusMessage': message})])
+
+        api = AzureWrapper(compute_client, monitor_client)
+        resource_group = 'test_rg'
+        expected = AzureScaleSet(scale_set.location, resource_group, scale_set.name, scale_set.sku.name, scale_set.sku.capacity,
+                                 scale_set.provisioning_state, now + TIMEOUT_PERIOD, reason)
+        acutal = api.list_scale_sets(resource_group)
+        self.assertEqual([expected], acutal)
+
+        compute_client.virtual_machine_scale_sets.list.assert_called_once_with(resource_group)
+        monitor_client.activity_logs.list.assert_called_once()

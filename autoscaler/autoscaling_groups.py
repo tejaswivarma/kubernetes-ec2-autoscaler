@@ -411,6 +411,9 @@ class AutoScalingGroup(object):
 
         return selectors
 
+    def is_timed_out(self):
+        return False
+
     @property
     def actual_capacity(self):
         return len(self.nodes)
