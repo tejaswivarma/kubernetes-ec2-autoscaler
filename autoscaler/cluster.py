@@ -551,6 +551,9 @@ class Cluster(object):
         async_operations = []
         for group in groups:
             logger.debug("group: %s", group)
+            if (self.autoscaling_timeouts.is_timed_out(group) or group.is_timed_out() or group.max_size == group.desired_capacity) \
+                    and not group.unschedulable_nodes:
+                continue
 
             unit_capacity = capacity.get_unit_capacity(group)
             new_instance_resources = []

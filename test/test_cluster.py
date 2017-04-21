@@ -243,6 +243,23 @@ class TestCluster(unittest.TestCase):
         self.assertIsNone(busy_node.reservation_id)
         self.assertTrue({nodes[1].reservation_id, nodes[2].reservation_id} == {reservations.DEFAULT_ID, reservation.id})
 
+    def test_timed_out_group(self):
+        with mock.patch('autoscaler.autoscaling_groups.AutoScalingGroup.is_timed_out') as is_timed_out:
+            with mock.patch('autoscaler.autoscaling_groups.AutoScalingGroup.scale') as scale:
+                is_timed_out.return_value = True
+                scale.return_value = utils.CompletedFuture(None)
+
+                pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
+                selectors_hash = utils.selectors_to_hash(pod.selectors)
+                asgs = self.cluster.autoscaling_groups.get_all_groups([])
+                self.cluster.fulfill_pending(asgs, selectors_hash, [pod], [])
+
+                scale.assert_not_called()
+
+                response = self.asg_client.describe_auto_scaling_groups()
+                self.assertEqual(len(response['AutoScalingGroups']), 1)
+                self.assertEqual(response['AutoScalingGroups'][0]['DesiredCapacity'], 0)
+
     def test_scale_down(self):
         """
         kube node with daemonset and no pod --> cordon
