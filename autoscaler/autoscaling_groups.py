@@ -415,6 +415,10 @@ class AutoScalingGroup(object):
         return False
 
     @property
+    def global_priority(self):
+        return 0
+
+    @property
     def actual_capacity(self):
         return len(self.nodes)
 

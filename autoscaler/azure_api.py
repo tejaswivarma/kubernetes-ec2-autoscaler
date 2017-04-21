@@ -18,9 +18,12 @@ from autoscaler.utils import Future
 logger = logging.getLogger(__name__)
 
 
+PRIORITY_TAG = 'priority'
+
+
 class AzureScaleSet:
     def __init__(self, location: str, resource_group: str, name: str, instance_type: str, capacity: int,
-                 provisioning_state: str, timeout_until: datetime = None, timeout_reason: str = None) -> None:
+                 provisioning_state: str, timeout_until: datetime = None, timeout_reason: str = None, priority: int = None) -> None:
         self.name = name
         self.instance_type = instance_type
         self.capacity = capacity
@@ -29,6 +32,7 @@ class AzureScaleSet:
         self.location = location
         self.timeout_until = timeout_until
         self.timeout_reason = timeout_reason
+        self.priority = priority
 
     def __str__(self):
         return 'AzureScaleSet({}, {}, {}, {})'.format(self.name, self.instance_type, self.capacity, self.provisioning_state)
@@ -37,7 +41,8 @@ class AzureScaleSet:
         return str(self)
 
     def _key(self):
-        return (self.name, self.instance_type, self.capacity, self.provisioning_state, self.resource_group, self.location, self.timeout_until, self.timeout_reason)
+        return (self.name, self.instance_type, self.capacity, self.provisioning_state, self.resource_group, self.location,
+                self.timeout_until, self.timeout_reason, self.priority)
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, AzureScaleSet):
@@ -121,9 +126,11 @@ class AzureWrapper(AzureApi):
                     timeout_until = failure.event_timestamp + TIMEOUT_PERIOD
                     timeout_reason = failure.sub_status.localized_value
 
+            priority = int(scale_set.tags[PRIORITY_TAG]) if PRIORITY_TAG in scale_set.tags else None
+
             result.append(AzureScaleSet(scale_set.location, resource_group_name, scale_set.name, scale_set.sku.name,
                                         scale_set.sku.capacity, scale_set.provisioning_state, timeout_until=timeout_until,
-                                        timeout_reason=timeout_reason))
+                                        timeout_reason=timeout_reason, priority=priority))
         return result
 
     def list_scale_set_instances(self, scale_set: AzureScaleSet) -> List[AzureScaleSetInstance]:

@@ -7,7 +7,7 @@ from azure.mgmt.compute.models import VirtualMachineScaleSet, Sku
 from azure.monitor.models import EventData, LocalizableString
 
 from autoscaler.azure_api import AzureApi, AzureScaleSet, AzureWriteThroughCachedApi, \
-    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD
+    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD, PRIORITY_TAG
 from autoscaler.utils import CompletedFuture
 
 
@@ -177,6 +177,29 @@ class TestWriteThroughCache(unittest.TestCase):
 
 
 class TestWrapper(unittest.TestCase):
+    def test_basic(self):
+        scale_set = VirtualMachineScaleSet('eastus', {PRIORITY_TAG: '1'}, sku=Sku('Standard_H16', capacity=1))
+        scale_set.name = 'test'
+        scale_set.provisioning_state = 'Succeeded'
+        scale_set.id = 'fake_id'
+
+        compute_client = mock.Mock()
+        compute_client.virtual_machine_scale_sets = mock.Mock()
+        compute_client.virtual_machine_scale_sets.list = mock.Mock(return_value=[scale_set])
+
+        monitor_client = mock.Mock()
+        monitor_client.activity_logs = mock.Mock()
+        monitor_client.activity_logs.list = mock.Mock(return_value=[])
+
+        api = AzureWrapper(compute_client, monitor_client)
+        resource_group = 'test_rg'
+        expected = AzureScaleSet(scale_set.location, resource_group, scale_set.name, scale_set.sku.name, scale_set.sku.capacity,
+                                 scale_set.provisioning_state, priority=1)
+        self.assertEqual([expected], api.list_scale_sets(resource_group))
+
+        compute_client.virtual_machine_scale_sets.list.assert_called_once_with(resource_group)
+        monitor_client.activity_logs.list.assert_called_once()
+
     def test_out_of_quota(self):
         scale_set = VirtualMachineScaleSet('eastus', {}, sku=Sku('Standard_H16', capacity=1))
         scale_set.name = 'test'

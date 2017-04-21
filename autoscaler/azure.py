@@ -226,11 +226,18 @@ class AzureVirtualScaleSet(AutoScalingGroup):
         self.instances = {}
         self.timeout_until = None
         self.timeout_reason = None
+        self._global_priority = None
         for scale_set in scale_sets:
             if scale_set.timeout_until is not None:
                 if self.timeout_until is None or self.timeout_until < scale_set.timeout_until:
                     self.timeout_until = scale_set.timeout_until
                     self.timeout_reason = scale_set.name + ": " + scale_set.timeout_reason
+            if scale_set.priority is not None:
+                if self._global_priority is None:
+                    self._global_priority = scale_set.priority
+                else:
+                    self._global_priority = max(scale_set.priority, self._global_priority)
+
             if scale_set.capacity == 0:
                 continue
             for instance in self.client.list_scale_set_instances(scale_set):
@@ -247,6 +254,12 @@ class AzureVirtualScaleSet(AutoScalingGroup):
             logger.warn("{} is timed out until {} because {}".format(self._id, self.timeout_until, self.timeout_reason))
             return True
         return False
+
+    @property
+    def global_priority(self):
+        if self._global_priority is None:
+            return super().global_priority
+        return self._global_priority
 
     def get_azure_instances(self):
         return self.instances.values()

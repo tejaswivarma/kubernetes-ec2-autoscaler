@@ -770,7 +770,7 @@ class Cluster(object):
             pinned_to_az = group.selectors.get('aws/az', 'z')
             priority = self._GROUP_PRIORITIES.get(
                 group.selectors.get('aws/type'), self._GROUP_DEFAULT_PRIORITY)
-            return (region, pinned_to_az, not group.is_spot, priority, group.name)
+            return (group.global_priority, region, pinned_to_az, not group.is_spot, priority, group.name)
         return sorted(groups, key=sort_key)
 
     def get_node_state(self, node, asg, node_pods, pods_to_schedule,

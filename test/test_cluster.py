@@ -450,3 +450,10 @@ class TestCluster(unittest.TestCase):
         self.assertEqual(response['AutoScalingGroups'][0]['DesiredCapacity'], 1)
         node.cordon.assert_called_once_with()
         node.drain.assert_called_once_with(pods, notifier=mock.ANY)
+
+    def test_prioritization(self):
+        TestingGroup = collections.namedtuple('TestingGroup', ['region', 'name', 'selectors', 'global_priority', 'is_spot'])
+        high_pri = TestingGroup('test', 'test', {}, -1, False)
+        low_pri = TestingGroup('test', 'test', {}, 0, False)
+
+        self.assertEqual([high_pri, low_pri], list(self.cluster._prioritize_groups([low_pri, high_pri])))
