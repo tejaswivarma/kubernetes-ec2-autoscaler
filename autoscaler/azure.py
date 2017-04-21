@@ -174,9 +174,6 @@ class AzureGroups(object):
                 scale_sets_by_type = {}
                 location_selector = resource_group.tags.get(LOCATION_SELECTOR, resource_group.location)
                 for scale_set in self.client.list_scale_sets(resource_group.name):
-                    if scale_set.provisioning_state == 'Failed':
-                        logger.error("{} failed provisioning. Ignoring it.".format(scale_set.name))
-                        continue
                     scale_sets_by_type.setdefault((scale_set.location, scale_set.instance_type), []).append(scale_set)
                 for key, scale_sets in scale_sets_by_type.items():
                     location, instance_type = key
@@ -284,11 +281,14 @@ class AzureVirtualScaleSet(AutoScalingGroup):
             if scale_set.capacity < _SCALE_SET_SIZE_LIMIT:
                 new_group_capacity = min(_SCALE_SET_SIZE_LIMIT, scale_set.capacity + scale_out)
                 scale_out -= (new_group_capacity - scale_set.capacity)
-                # Update our cached version
-                self.scale_sets[scale_set.name].capacity = new_group_capacity
                 if scale_set.provisioning_state == 'Updating':
                     logger.warn("Update of {} already in progress".format(scale_set.name))
                     continue
+                if scale_set.provisioning_state == 'Failed':
+                    logger.error("{} failed provisioning. Skipping it for scaling.".format(scale_set.name))
+                    continue
+                # Update our cached version
+                self.scale_sets[scale_set.name].capacity = new_group_capacity
                 futures.append(self.client.update_scale_set(scale_set, new_group_capacity))
                 logger.info("Scaling Azure Scale Set {} to {}".format(scale_set.name, new_group_capacity))
             if scale_out == 0:
