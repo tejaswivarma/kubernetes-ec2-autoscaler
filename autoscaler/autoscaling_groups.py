@@ -48,7 +48,7 @@ class AutoScalingGroups(object):
 
     def get_all_groups(self, kube_nodes):
         groups = []
-        with ThreadPoolExecutor(max_workers=len(self.regions)) as executor:
+        with ThreadPoolExecutor(max_workers=max(1, len(self.regions))) as executor:
             raw_groups_and_launch_configs = {}
             for region in self.regions:
                 client = self.session.client(self._BOTO_CLIENT_TYPE,

@@ -102,10 +102,12 @@ class Cluster(object):
                 pykube.KubeConfig.from_service_account())
 
         self._drained = {}
-        self.session = boto3.session.Session(
-            aws_access_key_id=aws_access_key,
-            aws_secret_access_key=aws_secret_key,
-            region_name=aws_regions[0])  # provide a default region
+        self.session = None
+        if aws_access_key and aws_secret_key:
+            self.session = boto3.session.Session(
+                aws_access_key_id=aws_access_key,
+                aws_secret_access_key=aws_secret_key,
+                region_name=aws_regions[0])  # provide a default region
         self.autoscaling_groups = autoscaling_groups.AutoScalingGroups(
             session=self.session, regions=aws_regions,
             cluster_name=cluster_name)

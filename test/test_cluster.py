@@ -84,8 +84,8 @@ class TestCluster(unittest.TestCase):
 
         # finally our cluster
         self.cluster = Cluster(
-            aws_access_key='',
-            aws_secret_key='',
+            aws_access_key='fake',
+            aws_secret_key='fake',
             aws_regions=['us-west-2', 'us-east-1', 'us-west-1'],
             azure_client_id='',
             azure_client_secret='',

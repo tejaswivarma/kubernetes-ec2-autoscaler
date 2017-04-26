@@ -62,14 +62,15 @@ def main(cluster_name, aws_regions, azure_regions, azure_resource_groups, sleep,
     logger.addHandler(logger_handler)
     logger.setLevel(DEBUG_LOGGING_MAP.get(verbose, logging.CRITICAL))
 
-    if not (aws_secret_key and aws_access_key):
+    aws_regions_list = aws_regions.split(',') if aws_regions else []
+    if not (aws_secret_key and aws_access_key) and aws_regions_list:
         logger.error("Missing AWS credentials. Please provide aws-access-key and aws-secret-key.")
         sys.exit(1)
 
     notifier = Notifier(slack_hook, slack_bot_token)
     cluster = Cluster(aws_access_key=aws_access_key,
                       aws_secret_key=aws_secret_key,
-                      aws_regions=aws_regions.split(','),
+                      aws_regions=aws_regions_list,
                       azure_legacy_regions=azure_regions.split(',') if azure_regions else [],
                       azure_client_id=azure_client_id,
                       azure_client_secret=azure_client_secret,
