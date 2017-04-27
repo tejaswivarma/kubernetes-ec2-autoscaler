@@ -8,6 +8,7 @@ import botocore
 import boto3
 import botocore.exceptions
 import datadog
+import pytz
 import pykube
 from azure.mgmt.compute import ComputeManagementClient
 from azure.monitor import MonitorClient
@@ -226,8 +227,12 @@ class Cluster(object):
             running_insts_map = self.get_running_instances_map(managed_nodes, azure_groups)
             self.stats.gauge('autoscaler.scaling_loop.instance_lookup_time', time.time() - instance_lookup_start_time)
 
-
+            pods_to_schedule_lookup_start_time = time.time()
             pods_to_schedule = self.get_pods_to_schedule(pods)
+            self.stats.gauge(
+                'autoscaler.scaling_loop.pods_to_schedule_lookup_time',
+                time.time() - pods_to_schedule_lookup_start_time,
+            )
 
             res_data = self.reservation_client.list_reservations()
             reservations_map = dict((r['id'], reservations.Reservation(r, managed_nodes))
@@ -916,7 +921,11 @@ class Cluster(object):
         # we only consider a pod to be schedulable if it's pending and
         # unassigned and feasible
         pods_to_schedule = {}
+        now = datetime.datetime.now(pytz.utc)
         for pod in pending_unassigned_pods:
+            age = (now - pod.creation_time).total_seconds()
+            self.stats.histogram('autoscaler.scaling_loop.pending_pod_age', age)
+
             if capacity.is_possible(pod):
                 pods_to_schedule.setdefault(
                     utils.selectors_to_hash(pod.selectors), []).append(pod)
