@@ -363,6 +363,11 @@ class AzureGroup(AutoScalingGroup):
 
         self._id = (self.region, self.name)
 
+    def is_timed_out(self):
+        if not Config.ENABLE_LEGACY_AZURE_CONTROLLER:
+            return True
+        return super().is_timed_out()
+
     @property
     def instance_ids(self):
         return set(self.instances.keys())
