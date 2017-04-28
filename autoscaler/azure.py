@@ -216,7 +216,7 @@ class AzureVirtualScaleSet(AutoScalingGroup):
         self.selectors['azure/class'] = _get_azure_class(self.instance_type)
 
         self.min_size = 0
-        self.max_size = 1000
+        self.max_size = 10000
         self.is_spot = False
 
         self.vm_id_to_instance: MutableMapping[str, Tuple[str, AzureScaleSetInstance]] = {}
