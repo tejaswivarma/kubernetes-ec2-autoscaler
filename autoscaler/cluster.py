@@ -405,6 +405,7 @@ class Cluster(object):
             elif state == ClusterNodeState.IDLE_UNSCHEDULABLE:
                 # remove it from asg
                 if not self.dry_run:
+                    node.delete()
                     if not asg:
                         logger.warn('Cannot find ASG for node %s. Not terminated.', node)
                     else:
@@ -418,9 +419,8 @@ class Cluster(object):
                     logger.info('[Dry run] Would have deleted %s', node)
             elif state == ClusterNodeState.DEAD:
                 if not self.dry_run:
-                    if not asg:
-                        node.delete()
-                    else:
+                    node.delete()
+                    if asg:
                         nodes_to_scale_in.setdefault(asg, []).append(node)
                 else:
                     logger.info('[Dry run] Would have reaped dead node %s', node)
