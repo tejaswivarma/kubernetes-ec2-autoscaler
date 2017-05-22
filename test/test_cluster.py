@@ -91,7 +91,6 @@ class TestCluster(unittest.TestCase):
             azure_client_secret='',
             azure_subscription_id='',
             azure_tenant_id='',
-            azure_legacy_regions=[],
             azure_resource_group_names=[],
             kubeconfig='~/.kube/config',
             idle_threshold=60,

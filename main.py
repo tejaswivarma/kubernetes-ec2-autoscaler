@@ -20,7 +20,6 @@ DEBUG_LOGGING_MAP = {
 @click.command()
 @click.option("--cluster-name")
 @click.option("--aws-regions", default="us-west-1")
-@click.option("--azure-regions")
 @click.option("--sleep", default=60)
 @click.option("--kubeconfig", default=None,
               help='Full path to kubeconfig file. If not provided, '
@@ -51,7 +50,7 @@ DEBUG_LOGGING_MAP = {
                    "for more verbosity.",
               type=click.IntRange(0, 3, clamp=True),
               count=True)
-def main(cluster_name, aws_regions, azure_regions, azure_resource_groups, sleep, kubeconfig,
+def main(cluster_name, aws_regions, azure_resource_groups, sleep, kubeconfig,
          azure_client_id, azure_client_secret, azure_subscription_id, azure_tenant_id,
          aws_access_key, aws_secret_key, datadog_api_key,
          idle_threshold, type_idle_threshold,
@@ -71,7 +70,6 @@ def main(cluster_name, aws_regions, azure_regions, azure_resource_groups, sleep,
     cluster = Cluster(aws_access_key=aws_access_key,
                       aws_secret_key=aws_secret_key,
                       aws_regions=aws_regions_list,
-                      azure_legacy_regions=azure_regions.split(',') if azure_regions else [],
                       azure_client_id=azure_client_id,
                       azure_client_secret=azure_client_secret,
                       azure_subscription_id=azure_subscription_id,

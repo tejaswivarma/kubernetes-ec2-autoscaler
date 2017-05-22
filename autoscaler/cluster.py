@@ -20,7 +20,6 @@ from azure.common.credentials import ServicePrincipalCredentials
 from msrestazure.azure_exceptions import CloudError
 
 import autoscaler.autoscaling_groups as autoscaling_groups
-import autoscaler.azure
 import autoscaler.azure as azure
 from autoscaler.azure_api import AzureWriteThroughCachedApi, AzureWrapper
 import autoscaler.capacity as capacity
@@ -83,7 +82,7 @@ class Cluster(object):
         'm4.10xlarge': 0
     }
 
-    def __init__(self, aws_regions, aws_access_key, aws_secret_key, azure_legacy_regions,
+    def __init__(self, aws_regions, aws_access_key, aws_secret_key,
                  azure_client_id, azure_client_secret, azure_subscription_id, azure_tenant_id,
                  azure_resource_group_names, kubeconfig,
                  idle_threshold, type_idle_threshold,
@@ -150,14 +149,13 @@ class Cluster(object):
             monitor_client.config.retry_policy.policy = azure.AzureBoundedRetry.from_retry(monitor_client.config.retry_policy.policy)
             self.azure_client = AzureWriteThroughCachedApi(AzureWrapper(compute_client, monitor_client))
 
-        self.azure_groups = azure.AzureGroups(azure_legacy_regions, resource_groups, self.azure_client)
+        self.azure_groups = azure.AzureGroups(resource_groups, self.azure_client)
 
         self.reservation_client = reservations.ReservationClient()
 
         # config
         self.azure_resource_group_names = azure_resource_group_names
         self.azure_regions = azure_regions
-        self.azure_legacy_regions = azure_legacy_regions
         self.aws_regions = aws_regions
         self.idle_threshold = idle_threshold
         self.instance_init_time = instance_init_time
@@ -176,7 +174,6 @@ class Cluster(object):
         self.stats.start()
 
         self.dry_run = dry_run
-        self._disable_azure = False
 
     def scale_loop(self):
         """
@@ -195,8 +192,6 @@ class Cluster(object):
 
             all_nodes = list(map(KubeNode, pykube_nodes))
             managed_nodes = [node for node in all_nodes if node.is_managed()]
-
-            self._disable_azure = False
 
             pods = list(map(KubePod, pykube.Pod.objects(self.api, namespace=pykube.all)))
 
@@ -506,7 +501,7 @@ class Cluster(object):
 
         for node in nodes:
             if not busy_nodes.get(node.name, False) and not node.unschedulable and \
-                    (node.reservation_id is None or node.reservation_id == azure.UNRESERVED_HOST or node.reservation_id == 'none'):
+                    (node.reservation_id is None or node.reservation_id == 'none'):
                 # node is unused, look for a reservation to assign it to
                 found_match = False
                 for reservation in pending_reservations:
@@ -708,17 +703,6 @@ class Cluster(object):
         instance_map = {}
 
         # first get azure instances
-        for region in self.azure_legacy_regions:
-            client = azure.AzureClient(region)
-            instances_data = client.list_instances()
-            if 'error' in instances_data:
-                self._disable_azure = True
-                logger.warn('Disabling Azure for loop')
-
-            instances = [autoscaler.azure.AzureInstance(inst_data['id'], inst_data['instance_type'], dateutil_parse(inst_data['launch_time']), inst_data['tags'])
-                         for inst_data in instances_data.get('instances', [])]
-            instance_map.update((inst.id, inst) for inst in instances)
-
         for group in azure_groups:
             if isinstance(group, azure.AzureVirtualScaleSet):
                 for instance in group.get_azure_instances():
@@ -772,7 +756,7 @@ class Cluster(object):
         def sort_key(group):
             region = self._GROUP_DEFAULT_PRIORITY
             try:
-                region = (self.azure_regions + self.aws_regions + self.azure_legacy_regions).index(group.region)
+                region = (self.azure_regions + self.aws_regions).index(group.region)
             except ValueError:
                 pass
             # Some ASGs are pinned to be in a single AZ. Sort them in front of
@@ -833,12 +817,7 @@ class Cluster(object):
                                idle_selector_hash[instance_type] < self.TYPE_IDLE_COUNT)
 
         if maybe_inst is None:
-            if not self._disable_azure:
-                return ClusterNodeState.INSTANCE_TERMINATED
-
-            # if we have disabled azure (because of maintenance etc.)
-            # let's not spin down any nodes just yet
-            return ClusterNodeState.GRACE_PERIOD
+            return ClusterNodeState.INSTANCE_TERMINATED
 
         if node.is_detached():
             return ClusterNodeState.DETACHED

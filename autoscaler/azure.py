@@ -1,26 +1,18 @@
 import http
 import logging
-import urllib.parse
 from typing import List, Tuple, MutableMapping
 from datetime import datetime
 
 import re
-import requests
-import requests.exceptions
-from dateutil.parser import parse as dateutil_parse
 from msrest.pipeline import ClientRetry
 
-import autoscaler.errors as errors
 import autoscaler.utils as utils
 from autoscaler.autoscaling_groups import AutoScalingGroup
 from autoscaler.azure_api import AzureApi, AzureScaleSet, AzureScaleSetInstance
-from autoscaler.config import Config
 from autoscaler.utils import TransformingFuture, AllCompletedFuture, CompletedFuture
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_TAG_VALUE = 'default'
-UNRESERVED_HOST = 'legacy-default-reservation-do-not-use'
 LOCATION_SELECTOR = 'location_selector'
 
 
@@ -71,104 +63,14 @@ class AzureBoundedRetry(ClientRetry):
         return _RETRY_TIME_LIMIT
 
 
-class AzureClient(object):
-    def __init__(self, region='us-south-central'):
-        self.region = region
-
-    def _url(self, path):
-        return urllib.parse.urljoin('http://azure-{}.{}/'.format(self.region, Config.NAMESPACE), path)
-
-    def list_instances(self):
-        try:
-            req = requests.get(self._url('instances'))
-            req.raise_for_status()
-        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
-            errors.capture_exception()
-            return {
-                'error': str(e)
-            }
-
-        return req.json()
-
-    def create_instances(self, instance_type, number, tags):
-        url = self._url('instances')
-        data = {
-            'instance_type': instance_type,
-            'number': number,
-            'tags': tags
-        }
-
-        logger.debug('POST %s (data=%s)', url, data)
-
-        try:
-            req = requests.post(url, json=data)
-
-            logger.debug('response: %s', req.text)
-
-            req.raise_for_status()
-        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
-            errors.capture_exception()
-            return {
-                'error': str(e)
-            }
-
-        return req.json()
-
-    def delete_instances(self, instance_id):
-        try:
-            req = requests.delete(self._url('instances/{}'.format(instance_id)))
-            req.raise_for_status()
-        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
-            errors.capture_exception()
-            return {
-                'error': str(e)
-            }
-
-        return req.json()
-
-    def get_tags(self):
-        try:
-            req = requests.get(self._url('allowed_launch_parameters'))
-            req.raise_for_status()
-        except (requests.exceptions.HTTPError, requests.exceptions.ConnectionError) as e:
-            errors.capture_exception()
-            return {
-                'error': str(e)
-            }
-        return req.json()
-
-
 class AzureGroups(object):
-    def __init__(self, legacy_regions, resource_groups, client: AzureApi):
-        self.legacy_regions = legacy_regions
+    def __init__(self, resource_groups, client: AzureApi):
         self.resource_groups = resource_groups
         self.client = client
 
     def get_all_groups(self, kube_nodes):
 
         groups = []
-        for region in self.legacy_regions:
-            client = AzureClient(region)
-
-            tags = client.get_tags()
-            instances = client.list_instances()
-
-            if 'error' in instances or 'error' in tags:
-                logger.warn('Failed to get instances in %s. Skipping.', region)
-                continue
-
-            for tag_set in tags['parameter_sets']:
-                instance_type = tag_set['instance_type']
-                tags = tag_set['tags']
-                group_instances = [
-                    AzureInstance(inst['id'], inst['instance_type'], dateutil_parse(inst['launch_time']), inst['tags']) for inst in instances['instances']
-                    if inst['instance_type'] == instance_type and
-                    all(inst['tags'].get(k) == tags[k] for k in tags.keys())]
-                for tag in tag_set.get('arbitrary_value_tags', []):
-                    tags[tag] = _DEFAULT_TAG_VALUE
-                group = AzureGroup(client, instance_type, tags, group_instances, kube_nodes)
-                groups.append(group)
-
         if self.client:
             for resource_group in self.resource_groups:
                 scale_sets_by_type = {}
@@ -328,84 +230,6 @@ class AzureVirtualScaleSet(AutoScalingGroup):
 
     def __str__(self):
         return 'AzureVirtualScaleSet({name}, {selectors_hash})'.format(name=self.name, selectors_hash=utils.selectors_to_hash(self.selectors))
-
-    def __repr__(self):
-        return str(self)
-
-class AzureGroup(AutoScalingGroup):
-    provider = 'azure'
-
-    def __init__(self, client, instance_type, tags, instances, kube_nodes):
-        self.client = client
-        self.instance_type = instance_type
-        self.tags = tags
-        # XXX: backwards compatibility hack, for when reservations were implemented with Azure tags
-        self.tags['openai.org/reservation-id'] = UNRESERVED_HOST
-        self.name = instance_type
-        self.desired_capacity = len(instances)
-
-        self.region = client.region
-
-        self.selectors = dict(tags)
-        # HACK: for matching node selectors
-        self.selectors['azure/type'] = self.instance_type
-        self.selectors['azure/region'] = self.region
-        self.selectors['azure/class'] = _get_azure_class(self.instance_type)
-
-        self.min_size = 0
-        self.max_size = 1000
-        self.is_spot = False
-
-        self.instances = dict((inst.id, inst) for inst in instances)
-        self.nodes = [node for node in kube_nodes
-                      if node.instance_id in self.instances]
-        self.unschedulable_nodes = [n for n in self.nodes if n.unschedulable]
-
-        self._id = (self.region, self.name)
-
-    def is_timed_out(self):
-        if not Config.ENABLE_LEGACY_AZURE_CONTROLLER:
-            return True
-        return super().is_timed_out()
-
-    @property
-    def instance_ids(self):
-        return set(self.instances.keys())
-
-    def set_desired_capacity(self, new_desired_capacity):
-        """
-        sets the desired capacity of the underlying ASG directly.
-        note that this is for internal control.
-        for scaling purposes, please use scale() instead.
-        """
-        logger.info("ASG: {} new_desired_capacity: {}".format(
-            self, new_desired_capacity))
-
-        self.client.create_instances(self.instance_type,
-                                     new_desired_capacity - len(self.instances),
-                                     self.tags)
-        self.desired_capacity = new_desired_capacity
-        return CompletedFuture(True)
-
-    def terminate_instances(self, instance_ids):
-        instance_ids = list(instance_ids)
-        for instance_id in instance_ids:
-            self.client.delete_instances(instance_id)
-        logger.info('Terminated instances %s', instance_ids)
-        return CompletedFuture(None)
-
-    def scale_nodes_in(self, nodes):
-        """
-        scale down asg by terminating the given node.
-        returns a future indicating when the request completes.
-        """
-        self.terminate_instances(node.instance_id for node in nodes)
-        for node in nodes:
-            self.nodes.remove(node)
-        return CompletedFuture(None)
-
-    def __str__(self):
-        return 'AzureGroup({name}, {selectors_hash})'.format(name=self.name, selectors_hash=utils.selectors_to_hash(self.selectors))
 
     def __repr__(self):
         return str(self)
