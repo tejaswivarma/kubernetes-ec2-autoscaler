@@ -114,6 +114,39 @@ class TestWriteThroughCache(unittest.TestCase):
         mock_api.list_scale_sets.assert_called_once_with('test_rg')
         mock_api.list_scale_set_instances.assert_called_once_with(updated_scale_set)
 
+    def test_inconsistent_delegate(self):
+        scale_set = AzureScaleSet('eastus', 'test_rg', 'test', 'Standard_H16', 0, 'Succeeded')
+        updated_scale_set = AzureScaleSet('eastus', 'test_rg', 'test', 'Standard_H16', 1, 'Succeeded')
+        instance = AzureScaleSetInstance('fake_id', 'fake_vm', datetime.now())
+        future = CompletedFuture(None)
+
+        mock_api = mock.Mock(AzureApi)
+        mock_api.list_scale_sets = mock.Mock(return_value=[scale_set])
+        mock_api.list_scale_set_instances = mock.Mock(return_value=[])
+        mock_api.update_scale_set = mock.Mock(return_value=future)
+
+        cached_api = AzureWriteThroughCachedApi(mock_api)
+
+        self.assertEqual(cached_api.list_scale_sets('test_rg'), [scale_set])
+        self.assertEqual(cached_api.list_scale_set_instances(scale_set), [])
+        mock_api.list_scale_sets.assert_called_once_with('test_rg')
+        mock_api.list_scale_set_instances.assert_called_once_with(scale_set)
+        cached_api.update_scale_set(scale_set, 1).result()
+        mock_api.update_scale_set.assert_called_once_with(scale_set, 1)
+
+        mock_api.list_scale_sets = mock.Mock(return_value=[updated_scale_set])
+        mock_api.list_scale_set_instances = mock.Mock(return_value=[])
+        self.assertEqual(cached_api.list_scale_sets('test_rg'), [updated_scale_set])
+        self.assertEqual(cached_api.list_scale_set_instances(updated_scale_set), [])
+        mock_api.list_scale_sets.assert_called_once_with('test_rg')
+        mock_api.list_scale_set_instances.assert_called_once_with(updated_scale_set)
+
+        # Test that even if there is inconsistency between the list_scale_sets and list_scale_set_instances, the
+        # cache doesn't end up with bad data
+        mock_api.list_scale_set_instances = mock.Mock(return_value=[instance])
+        self.assertEqual(cached_api.list_scale_set_instances(updated_scale_set), [instance])
+        mock_api.list_scale_set_instances.assert_called_once_with(updated_scale_set)
+
     def test_terminate(self):
         scale_set = AzureScaleSet('eastus', 'test_rg', 'test', 'Standard_H16', 1, 'Succeeded')
         updated_scale_set = AzureScaleSet('eastus', 'test_rg', 'test', 'Standard_H16', 0, 'Succeeded')

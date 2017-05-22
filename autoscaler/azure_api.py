@@ -191,8 +191,10 @@ class AzureWriteThroughCachedApi(AzureApi):
                 return deepcopy(self._instance_cache[key])
 
         instances = self._delegate.list_scale_set_instances(scale_set)
-        with self._lock:
-            self._instance_cache[key] = instances
+        # Make sure we don't poison the cache, if our delegate is eventually consistent
+        if len(instances) == scale_set.capacity:
+            with self._lock:
+                self._instance_cache[key] = instances
         return deepcopy(instances)
 
     def update_scale_set(self, scale_set: AzureScaleSet, new_capacity: int) -> Future:
