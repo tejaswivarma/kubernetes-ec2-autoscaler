@@ -4,7 +4,7 @@ from typing import List, Tuple, MutableMapping
 from datetime import datetime
 
 import re
-from msrest.pipeline import ClientRetry
+from requests.packages.urllib3 import Retry
 
 import autoscaler.utils as utils
 from autoscaler.autoscaling_groups import AutoScalingGroup
@@ -19,7 +19,7 @@ LOCATION_SELECTOR = 'location_selector'
 _RETRY_TIME_LIMIT = 30
 
 
-class AzureBoundedRetry(ClientRetry):
+class AzureBoundedRetry(Retry):
     """
     XXX: Azure sometimes sends us a Retry-After: 1200, even when we still have quota, causing our client to appear to hang.
     Ignore them and just retry after 30secs
