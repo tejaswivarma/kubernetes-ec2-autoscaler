@@ -627,7 +627,7 @@ class Cluster(object):
                 async_operation.add_done_callback(notify_if_scaled)
             else:
                 logger.info(
-                    '[Dry run] Would have scaled up to %s', new_capacity)
+                    '[Dry run] Would have scaled up (%s) to %s', group, new_capacity)
 
             for i in range(min(len(assigned_pods), units_requested)):
                 for pod in assigned_pods[i]:
