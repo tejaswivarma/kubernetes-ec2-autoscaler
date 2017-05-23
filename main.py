@@ -24,6 +24,9 @@ DEBUG_LOGGING_MAP = {
 @click.option("--kubeconfig", default=None,
               help='Full path to kubeconfig file. If not provided, '
                    'we assume that we\'re running on kubernetes.')
+@click.option("--pod-namespace", default=None,
+              help='The namespace to look for out-of-resource pods in. By '
+                   'default, this will look in all namespaces.')
 @click.option("--idle-threshold", default=3600)
 @click.option("--type-idle-threshold", default=3600*24*7)
 @click.option("--over-provision", default=5)
@@ -45,7 +48,7 @@ DEBUG_LOGGING_MAP = {
                    "for more verbosity.",
               type=click.IntRange(0, 3, clamp=True),
               count=True)
-def main(cluster_name, regions, sleep, kubeconfig,
+def main(cluster_name, regions, sleep, kubeconfig, pod_namespace,
          aws_access_key, aws_secret_key, datadog_api_key,
          idle_threshold, type_idle_threshold,
          over_provision, instance_init_time, no_scale, no_maintenance,
@@ -64,6 +67,7 @@ def main(cluster_name, regions, sleep, kubeconfig,
                       aws_secret_key=aws_secret_key,
                       regions=regions.split(','),
                       kubeconfig=kubeconfig,
+                      pod_namespace=pod_namespace,
                       idle_threshold=idle_threshold,
                       instance_init_time=instance_init_time,
                       type_idle_threshold=type_idle_threshold,

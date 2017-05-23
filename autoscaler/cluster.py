@@ -15,9 +15,6 @@ import autoscaler.capacity as capacity
 from autoscaler.kube import KubePod, KubeNode, KubeResource, KubePodStatus
 import autoscaler.utils as utils
 
-# we are interested in all pods, incl. system ones
-pykube.Pod.objects.namespace = None
-
 logger = logging.getLogger(__name__)
 
 
@@ -65,7 +62,7 @@ class Cluster(object):
     }
 
     def __init__(self, regions, aws_access_key, aws_secret_key,
-                 kubeconfig, idle_threshold, type_idle_threshold,
+                 kubeconfig, pod_namespace, idle_threshold, type_idle_threshold,
                  instance_init_time, cluster_name, notifier,
                  scale_up=True, maintainance=True,
                  datadog_api_key=None,
@@ -80,6 +77,10 @@ class Cluster(object):
             logger.debug('Using kube service account')
             self.api = pykube.HTTPClient(
                 pykube.KubeConfig.from_service_account())
+        if pod_namespace is None:
+            self.pod_namespace = pykube.all
+        else:
+            self.pod_namespace = pod_namespace
 
         self._drained = {}
         self.session = boto3.session.Session(
@@ -130,7 +131,7 @@ class Cluster(object):
 
             running_insts_map = self.get_running_instances_map(managed_nodes)
 
-            pods = map(KubePod, pykube.Pod.objects(self.api))
+            pods = map(KubePod, pykube.Pod.objects(self.api, namespace=self.namespace))
 
             running_or_pending_assigned_pods = [
                 p for p in pods if (p.status == KubePodStatus.RUNNING or p.status == KubePodStatus.CONTAINER_CREATING) or (

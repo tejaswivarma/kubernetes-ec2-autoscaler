@@ -124,6 +124,7 @@ $ python main.py [options]
 - --regions: List of comma-separated regions in order of preference. E.g. `us-west-2,us-east-1` will use "us-west-2" as the
 primary region and "us-east-1" as the secondary.
 - --kubeconfig: Path to kubeconfig YAML file. Leave blank if running in Kubernetes to use [service account](http://kubernetes.io/docs/user-guide/service-accounts/).
+- --pod-namespace: The namespace to look for out-of-resource pods in. By default, this will look in all namespaces.
 - --idle-threshold: This defines the maximum duration (in seconds) for an instance to be kept idle.
 - --type-idle-threshold: For each instance type, we keep a few running and idle so the cluster has spare capacity for different types of requests. This defines the maximum duration (in seconds) for an instance to be kept idle.
 - --aws-access-key: AWS access key. Can also be specified in environment variable `AWS_ACCESS_KEY`

@@ -75,6 +75,7 @@ class TestCluster(unittest.TestCase):
             aws_secret_key='',
             regions=['us-west-2', 'us-east-1', 'us-west-1'],
             kubeconfig='~/.kube/config',
+            pod_namespace=None,
             idle_threshold=60,
             instance_init_time=60,
             type_idle_threshold=60,
