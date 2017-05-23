@@ -910,7 +910,7 @@ class Cluster(object):
                     utils.selectors_to_hash(pod.selectors), []).append(pod)
             else:
                 recommended_capacity = capacity.max_capacity_for_selectors(
-                    pod.selectors)
+                    pod.selectors, pod.resources)
                 logger.warn(
                     "Pending pod %s cannot fit %s. "
                     "Please check that requested resource amount is "

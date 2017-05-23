@@ -28,13 +28,13 @@ def is_possible(pod):
     """
     returns whether the pod is possible under the maximum allowable capacity
     """
-    max_pod_capacity = max_capacity_for_selectors(pod.selectors)
+    max_pod_capacity = max_capacity_for_selectors(pod.selectors, pod.resources)
     if not max_pod_capacity:
         return False
     return (max_pod_capacity - pod.resources).possible
 
 
-def max_capacity_for_selectors(selectors):
+def max_capacity_for_selectors(selectors, resource_requests):
     """
     returns the maximum capacity that is possible for the given selectors
     """
@@ -67,7 +67,7 @@ def max_capacity_for_selectors(selectors):
     for type_, resource in unit_caps.items():
         if (not class_ or type_.startswith(class_) or
                 type_.startswith(azure_class)):
-            if not max_capacity or (resource - max_capacity).possible:
+            if not max_capacity or (resource - max_capacity).possible or (resource - resource_requests).possible:
                 max_capacity = resource
 
     return max_capacity
