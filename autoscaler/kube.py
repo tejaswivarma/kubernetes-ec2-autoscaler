@@ -237,7 +237,7 @@ class KubeNode(object):
 
     def can_fit(self, resources):
         assert isinstance(resources, KubeResource)
-        left = self.used_capacity + resources - self.capacity
+        left = self.capacity - (self.used_capacity + resources)
         return left.possible
 
     def is_match(self, pod):
