@@ -131,7 +131,7 @@ class Cluster(object):
 
             running_insts_map = self.get_running_instances_map(managed_nodes)
 
-            pods = map(KubePod, pykube.Pod.objects(self.api, namespace=self.namespace))
+            pods = map(KubePod, pykube.Pod.objects(self.api, namespace=self.pod_namespace))
 
             running_or_pending_assigned_pods = [
                 p for p in pods if (p.status == KubePodStatus.RUNNING or p.status == KubePodStatus.CONTAINER_CREATING) or (
