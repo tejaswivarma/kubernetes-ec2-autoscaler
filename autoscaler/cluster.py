@@ -487,6 +487,8 @@ class Cluster(object):
                 operation.result()
             except CloudError as e:
                 logger.warn("Error while deleting Azure node: {}".format(e.message))
+            except TimeoutError:
+                logger.warn("Timeout while deleting Azure node")
 
     def assign_nodes_to_reservations(self, nodes, pods_by_node, reservations_map):
         pending_reservations = set()
@@ -651,6 +653,8 @@ class Cluster(object):
                 operation.result()
             except CloudError as e:
                 logger.warn("Error while scaling Scale Set: {}".format(e.message))
+            except TimeoutError:
+                logger.warn("Timeout while scaling Scale Set")
 
     def get_running_instances_in_region(self, region, instance_ids):
         """

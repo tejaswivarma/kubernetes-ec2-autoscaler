@@ -216,6 +216,9 @@ class AzureWriteThroughCachedApi(AzureApi):
                 del self._scale_set_cache[resource_group_name]
 
 
+_AZURE_API_MAX_WAIT = 10*60
+
+
 # Adapts an Azure async operation to behave like a Future
 class AzureOperationPollerFutureAdapter(Future):
     def __init__(self, azure_operation):
@@ -246,7 +249,10 @@ class AzureOperationPollerFutureAdapter(Future):
     def result(self):
         with self._condition:
             if not self._done:
-                self._condition.wait()
+                self._condition.wait(_AZURE_API_MAX_WAIT)
+                if not self._done:
+                    # We reached the timeout
+                    raise TimeoutError()
             if self._exception:
                 raise self._exception
             return self._result
