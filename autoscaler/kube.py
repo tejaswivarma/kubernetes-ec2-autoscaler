@@ -186,6 +186,10 @@ class KubeNode(object):
     def unschedulable(self):
         return self.original.obj['spec'].get('unschedulable', False)
 
+    @property
+    def can_uncordon(self):
+        return utils.parse_bool_label(self.selectors.get(_CORDON_LABEL))
+
     def drain(self, pods, notifier=None):
         for pod in pods:
             if pod.is_drainable():
