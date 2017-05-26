@@ -5,7 +5,7 @@ import pykube
 import yaml
 
 import autoscaler.capacity as capacity
-from autoscaler.kube import KubePod
+from autoscaler.kube import KubeNode, KubePod
 
 
 class TestCapacity(unittest.TestCase):
@@ -13,12 +13,19 @@ class TestCapacity(unittest.TestCase):
         dir_path = os.path.dirname(os.path.realpath(__file__))
         with open(os.path.join(dir_path, 'data/busybox.yaml'), 'r') as f:
             dummy_pod = yaml.load(f.read())
+        with open(os.path.join(dir_path, 'data/node.yaml'), 'r') as f:
+            self.dummy_node = yaml.load(f.read())
 
         # this isn't actually used here
         # only needed to create the KubePod object...
         self.api = pykube.HTTPClient(pykube.KubeConfig.from_file('~/.kube/config'))
 
         self.dummy_pod = dummy_pod
+
+    def test_can_fit(self):
+        pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
+        node = KubeNode(pykube.Node(self.api, self.dummy_node))
+        assert node.can_fit(pod.resources)
 
     def test_possible(self):
         pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
