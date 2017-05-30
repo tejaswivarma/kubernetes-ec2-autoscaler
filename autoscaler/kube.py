@@ -18,6 +18,7 @@ class KubePodStatus(object):
     FAILED = 'Failed'
 
 _CORDON_LABEL = 'openai/cordoned-by-autoscaler'
+_NUM_API_RETRIES = 3
 
 
 class KubePod(object):
@@ -107,6 +108,7 @@ def reverse_bytes(value):
         result += value[i - 2: i]
     return result
 
+
 class KubeNode(object):
     _HEARTBEAT_GRACE_PERIOD = datetime.timedelta(seconds=60*60)
 
@@ -117,7 +119,6 @@ class KubeNode(object):
         metadata = node.obj['metadata']
         self.name = metadata['name']
         self.instance_id, self.region, self.instance_type, self.provider = self._get_instance_data()
-        self.selectors = metadata.get('labels', {})
 
         self.capacity = KubeResource(**node.obj['status']['capacity'])
         self.used_capacity = KubeResource()
@@ -169,6 +170,10 @@ class KubeNode(object):
         return (None, '', None, None)
 
     @property
+    def selectors(self):
+        return self.original.obj['metadata'].get('labels', {})
+
+    @property
     def reservation_id(self):
         return self.selectors.get('openai.org/reservation-id')
 
@@ -176,11 +181,20 @@ class KubeNode(object):
     def reservation_id(self, reservation_id):
         if reservation_id == self.reservation_id:
             return
-        self.original.reload()
-        self.original.obj['metadata'].setdefault('labels', {})['openai.org/reservation-id'] = reservation_id
-        self.original.update()
-        self.selectors = self.original.obj['metadata'].get('labels', {})
-        logger.info("Assigned %s (%s) to reservation %s", self.name, self.instance_id, reservation_id)
+
+        for _ in range(_NUM_API_RETRIES):
+            try:
+                self.original.reload()
+                self.original.obj['metadata'].setdefault('labels', {})['openai.org/reservation-id'] = reservation_id
+                self.original.update()
+                logger.info("Assigned %s (%s) to reservation %s", self.name, self.instance_id, reservation_id)
+                return
+            except pykube.exceptions.HTTPError as e:
+                if e.code == 409:
+                    logger.info('Retrying reservation assignment [%s (%s) -> %s]',
+                                self.name, self.instance_id, reservation_id)
+                else:
+                    raise e
 
     @property
     def unschedulable(self):
