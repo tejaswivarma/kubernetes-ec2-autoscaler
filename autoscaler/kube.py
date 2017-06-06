@@ -206,7 +206,7 @@ class KubeNode(object):
 
     def drain(self, pods, notifier=None):
         for pod in pods:
-            if pod.is_drainable():
+            if pod.is_drainable() and not pod.is_mirrored():
                 pod.delete()
 
         logger.info("drained %s", self)
