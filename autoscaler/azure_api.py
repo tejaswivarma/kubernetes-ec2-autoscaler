@@ -249,15 +249,23 @@ class AzureOperationPollerFutureAdapter(Future):
             callback(self)
 
     def result(self):
-        with self._condition:
-            if not self._done:
-                self._condition.wait(_AZURE_API_MAX_WAIT)
+        callbacks = []
+        try:
+            with self._condition:
                 if not self._done:
-                    # We reached the timeout
-                    raise TimeoutError()
-            if self._exception:
-                raise self._exception
-            return self._result
+                    self._condition.wait(_AZURE_API_MAX_WAIT)
+                    if not self._done:
+                        # We reached the timeout
+                        self._exception = TimeoutError()
+                        self._done = True
+                        callbacks = self._callbacks
+                        self._callbacks.clear()
+                if self._exception:
+                    raise self._exception
+                return self._result
+        finally:
+            for callback in callbacks:
+                callback(self)
 
     def add_done_callback(self, fn):
         with self._condition:
