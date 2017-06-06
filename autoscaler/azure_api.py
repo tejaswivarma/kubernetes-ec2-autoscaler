@@ -102,11 +102,13 @@ class AzureWrapper(AzureApi):
     def list_scale_sets(self, resource_group_name: str) -> List[AzureScaleSet]:
         fifteen_minutes_ago = datetime.now(pytz.utc) - TIMEOUT_PERIOD
         filter_clause = "eventTimestamp ge '{}' and resourceGroupName eq '{}'".format(fifteen_minutes_ago, resource_group_name)
-        select_clause = "status,subStatus,properties,resourceId,eventTimestamp"
+        select_clause = "authorization,status,subStatus,properties,resourceId,eventTimestamp"
 
         failures_by_scale_set: MutableMapping[str, List[EventData]] = {}
         for log in self._monitor_client.activity_logs.list(filter=filter_clause, select=select_clause):
             if (log.status and log.status.value == 'Failed') or (log.properties and log.properties.get('statusCode') == 'Conflict'):
+                if log.authorization and log.authorization.action and 'delete' in log.authorization.action:
+                    continue
                 failures_by_scale_set.setdefault(log.resource_id, []).append(log)
 
         result = []
