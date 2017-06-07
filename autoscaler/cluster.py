@@ -87,6 +87,7 @@ class Cluster(object):
                  azure_resource_group_names, kubeconfig,
                  idle_threshold, type_idle_threshold,
                  instance_init_time, cluster_name, notifier,
+                 max_scale_in_fraction=0.1,
                  scale_up=True, maintainance=True,
                  datadog_api_key=None,
                  over_provision=5, dry_run=False):
@@ -101,6 +102,7 @@ class Cluster(object):
             self.api = pykube.HTTPClient(
                 pykube.KubeConfig.from_service_account())
 
+        self.max_scale_in_fraction = max_scale_in_fraction
         self._drained = {}
         self.session = None
         if aws_access_key and aws_secret_key:
@@ -359,6 +361,7 @@ class Cluster(object):
         stats_time = time.time()
 
         nodes_to_scale_in = {}
+        nodes_to_delete = []
         for node in cached_managed_nodes:
             asg = utils.get_group_for_node(asgs, node)
             state = self.get_node_state(
@@ -407,7 +410,7 @@ class Cluster(object):
             elif state == ClusterNodeState.IDLE_UNSCHEDULABLE:
                 # remove it from asg
                 if not self.dry_run:
-                    node.delete()
+                    nodes_to_delete.append(node)
                     if not asg:
                         logger.warn('Cannot find ASG for node %s. Not terminated.', node)
                     else:
@@ -416,12 +419,12 @@ class Cluster(object):
                     logger.info('[Dry run] Would have scaled in %s', node)
             elif state == ClusterNodeState.INSTANCE_TERMINATED:
                 if not self.dry_run:
-                    node.delete()
+                    nodes_to_delete.append(node)
                 else:
                     logger.info('[Dry run] Would have deleted %s', node)
             elif state == ClusterNodeState.DEAD:
                 if not self.dry_run:
-                    node.delete()
+                    nodes_to_delete.append(node)
                     if asg:
                         nodes_to_scale_in.setdefault(asg, []).append(node)
                 else:
@@ -431,10 +434,6 @@ class Cluster(object):
                 pass
             else:
                 raise Exception("Unhandled state: {}".format(state))
-
-        async_operations = []
-        for asg, nodes in nodes_to_scale_in.items():
-            async_operations.append(asg.scale_nodes_in(nodes))
 
         logger.info("++++++++++++++ Maintaining Unmanaged Instances ++++++++++++++++")
         # these are instances that have been running for a while but it's not properly managed
@@ -480,8 +479,23 @@ class Cluster(object):
                                 logger.info(
                                     '[Dry run] Would have terminated unmanaged %s [%s]', inst, asg.region)
 
-        for asg, instance_ids in instances_to_terminate.items():
-            async_operations.append(asg.terminate_instances(instance_ids))
+        async_operations = []
+        total_instances = max(sum(len(asg.instance_ids) for asg in asgs), len(cached_managed_nodes))
+        max_allowed_scale_in = int(math.ceil(self.max_scale_in_fraction * total_instances))
+        to_scale_in = sum(len(nodes) for nodes in nodes_to_scale_in.values()) + \
+                      sum(len(instance_ids) for instance_ids in instances_to_terminate.values())
+        to_scale_in = max(to_scale_in, len(nodes_to_delete))
+        if to_scale_in > max_allowed_scale_in:
+            logger.error("TOO MANY NODES TO SCALE IN: {}, max allowed is {}".format(to_scale_in, max_allowed_scale_in))
+        elif not self.dry_run:
+            for asg, nodes in nodes_to_scale_in.items():
+                async_operations.append(asg.scale_nodes_in(nodes))
+
+            for asg, instance_ids in instances_to_terminate.items():
+                async_operations.append(asg.terminate_instances(instance_ids))
+
+            for node in nodes_to_delete:
+                node.delete()
 
         # Wait for all background scale-in operations to complete
         for operation in async_operations:

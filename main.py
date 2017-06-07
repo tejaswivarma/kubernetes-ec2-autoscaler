@@ -27,6 +27,7 @@ DEBUG_LOGGING_MAP = {
 @click.option("--idle-threshold", default=3300)
 @click.option("--type-idle-threshold", default=3600*24*7)
 @click.option("--over-provision", default=5)
+@click.option("--max-scale-in-fraction", default=0.1)
 @click.option("--azure-resource-groups")
 @click.option("--azure-client-id", default=None, envvar='AZURE_CLIENT_ID')
 @click.option("--azure-client-secret", default=None, envvar='AZURE_CLIENT_SECRET')
@@ -53,7 +54,7 @@ DEBUG_LOGGING_MAP = {
 def main(cluster_name, aws_regions, azure_resource_groups, sleep, kubeconfig,
          azure_client_id, azure_client_secret, azure_subscription_id, azure_tenant_id,
          aws_access_key, aws_secret_key, datadog_api_key,
-         idle_threshold, type_idle_threshold,
+         idle_threshold, type_idle_threshold, max_scale_in_fraction,
          over_provision, instance_init_time, no_scale, no_maintenance,
          slack_hook, slack_bot_token, dry_run, verbose):
     logger_handler = logging.StreamHandler(sys.stderr)
@@ -80,6 +81,7 @@ def main(cluster_name, aws_regions, azure_resource_groups, sleep, kubeconfig,
                       instance_init_time=instance_init_time,
                       type_idle_threshold=type_idle_threshold,
                       cluster_name=cluster_name,
+                      max_scale_in_fraction=max_scale_in_fraction,
                       scale_up=not no_scale,
                       maintainance=not no_maintenance,
                       over_provision=over_provision,

@@ -163,6 +163,28 @@ class TestCluster(unittest.TestCase):
         self.cluster.maintain([kube_node], {kube_node.instance_id: instance}, {}, [], [], {})
         kube_node.delete.assert_called_once_with()
 
+    def test_max_scale_in(self):
+        node1 = copy.deepcopy(self.dummy_node)
+        node2 = copy.deepcopy(self.dummy_node)
+        TestInstance = collections.namedtuple('TestInstance', ['launch_time'])
+        instance1 = TestInstance(datetime.now(pytz.utc))
+        instance2 = TestInstance(datetime.now(pytz.utc))
+
+        for node in [node1, node2]:
+            for condition in node['status']['conditions']:
+                if condition['type'] == 'Ready':
+                    condition['status'] = 'Unknown'
+                    condition['lastHeartbeatTime'] = datetime.isoformat(datetime.now(pytz.utc) - timedelta(hours=2))
+                    break
+
+        kube_node1 = KubeNode(pykube.Node(self.api, node1))
+        kube_node1.delete = mock.Mock(return_value="mocked stuff")
+        kube_node2 = KubeNode(pykube.Node(self.api, node2))
+        kube_node2.delete = mock.Mock(return_value="mocked stuff")
+        self.cluster.maintain([kube_node1, kube_node2], {kube_node1.instance_id: instance1, kube_node2.instance_id: instance2}, {}, [], [], {})
+        kube_node1.delete.assert_not_called()
+        kube_node2.delete.assert_not_called()
+
     def test_scale_up_selector(self):
         self.dummy_pod['spec']['nodeSelector'] = {
             'aws/type': 'm4.large'
