@@ -289,7 +289,7 @@ class Cluster(object):
             for pod in pods:
                 fitting = None
                 for node in cached_live_nodes:
-                    if node.unschedulable and not node.can_uncordon:
+                    if node.unschedulable:
                         continue
                     if node.is_match(pod) and node.can_fit(pod.resources):
                         fitting = node
