@@ -18,7 +18,6 @@ class KubePodStatus(object):
     FAILED = 'Failed'
 
 _CORDON_LABEL = 'openai/cordoned-by-autoscaler'
-_NUM_API_RETRIES = 3
 
 
 class KubePod(object):
@@ -172,29 +171,6 @@ class KubeNode(object):
     @property
     def selectors(self):
         return self.original.obj['metadata'].get('labels', {})
-
-    @property
-    def reservation_id(self):
-        return self.selectors.get('openai.org/reservation-id')
-
-    @reservation_id.setter
-    def reservation_id(self, reservation_id):
-        if reservation_id == self.reservation_id:
-            return
-
-        for _ in range(_NUM_API_RETRIES):
-            try:
-                self.original.reload()
-                self.original.obj['metadata'].setdefault('labels', {})['openai.org/reservation-id'] = reservation_id
-                self.original.update()
-                logger.info("Assigned %s (%s) to reservation %s", self.name, self.instance_id, reservation_id)
-                return
-            except pykube.exceptions.HTTPError as e:
-                if e.code == 409:
-                    logger.info('Retrying reservation assignment [%s (%s) -> %s]',
-                                self.name, self.instance_id, reservation_id)
-                else:
-                    raise e
 
     @property
     def unschedulable(self):

@@ -12,10 +12,8 @@ import moto
 import yaml
 import pytz
 
-from autoscaler import reservations
 from autoscaler.cluster import Cluster, ClusterNodeState
-from autoscaler.kube import KubePod, KubeNode, KubeResource
-from autoscaler.notification import Notifier
+from autoscaler.kube import KubePod, KubeNode
 import autoscaler.utils as utils
 
 
@@ -129,16 +127,6 @@ class TestCluster(unittest.TestCase):
             nodes.append(node)
         return nodes
 
-    @staticmethod
-    def _create_reservation(name, instances, nodes):
-        data = {}
-        data['name'] = name
-        data['username'] = 'dummy'
-        data['id'] = data['username'] + '-' + data['name']
-        data['node_selectors'] = '{}'
-        data['resources'] = json.dumps({'instances': instances})
-        return reservations.Reservation(data, nodes)
-
     def test_reap_dead_node(self):
         node = copy.deepcopy(self.dummy_node)
         TestInstance = collections.namedtuple('TestInstance', ['launch_time'])
@@ -154,13 +142,13 @@ class TestCluster(unittest.TestCase):
         ready_condition['lastHeartbeatTime'] = datetime.isoformat(datetime.now(pytz.utc) - timedelta(minutes=30))
         kube_node = KubeNode(pykube.Node(self.api, node))
         kube_node.delete = mock.Mock(return_value="mocked stuff")
-        self.cluster.maintain([kube_node], {kube_node.instance_id: instance}, {}, [], [], {})
+        self.cluster.maintain([kube_node], {kube_node.instance_id: instance}, {}, [], [])
         kube_node.delete.assert_not_called()
 
         ready_condition['lastHeartbeatTime'] = datetime.isoformat(datetime.now(pytz.utc) - timedelta(hours=2))
         kube_node = KubeNode(pykube.Node(self.api, node))
         kube_node.delete = mock.Mock(return_value="mocked stuff")
-        self.cluster.maintain([kube_node], {kube_node.instance_id: instance}, {}, [], [], {})
+        self.cluster.maintain([kube_node], {kube_node.instance_id: instance}, {}, [], [])
         kube_node.delete.assert_called_once_with()
 
     def test_max_scale_in(self):
@@ -181,7 +169,7 @@ class TestCluster(unittest.TestCase):
         kube_node1.delete = mock.Mock(return_value="mocked stuff")
         kube_node2 = KubeNode(pykube.Node(self.api, node2))
         kube_node2.delete = mock.Mock(return_value="mocked stuff")
-        self.cluster.maintain([kube_node1, kube_node2], {kube_node1.instance_id: instance1, kube_node2.instance_id: instance2}, {}, [], [], {})
+        self.cluster.maintain([kube_node1, kube_node2], {kube_node1.instance_id: instance1, kube_node2.instance_id: instance2}, {}, [], [])
         kube_node1.delete.assert_not_called()
         kube_node2.delete.assert_not_called()
 
@@ -192,7 +180,7 @@ class TestCluster(unittest.TestCase):
         pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
         selectors_hash = utils.selectors_to_hash(pod.selectors)
         asgs = self.cluster.autoscaling_groups.get_all_groups([])
-        self.cluster.fulfill_pending(asgs, selectors_hash, [pod], [])
+        self.cluster.fulfill_pending(asgs, selectors_hash, [pod])
 
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -202,7 +190,7 @@ class TestCluster(unittest.TestCase):
         pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
         selectors_hash = utils.selectors_to_hash(pod.selectors)
         asgs = self.cluster.autoscaling_groups.get_all_groups([])
-        self.cluster.fulfill_pending(asgs, selectors_hash, [pod], [])
+        self.cluster.fulfill_pending(asgs, selectors_hash, [pod])
 
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -216,53 +204,8 @@ class TestCluster(unittest.TestCase):
         big_pod = KubePod(pykube.Pod(self.api, big_pod_spec))
         selectors_hash = utils.selectors_to_hash(pod.selectors)
         asgs = self.cluster.autoscaling_groups.get_all_groups([])
-        self.cluster.fulfill_pending(asgs, selectors_hash, [pod, big_pod], [])
+        self.cluster.fulfill_pending(asgs, selectors_hash, [pod, big_pod])
         self.cluster.notifier.notify_scale.assert_called_with(mock.ANY, mock.ANY, [pod])
-
-    def test_scale_up_for_default_reservation(self):
-        self.dummy_pod['spec']['nodeSelector'] = {
-            'openai.org/reservation-id': reservations.DEFAULT_ID
-        }
-        pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
-        selectors_hash = utils.selectors_to_hash(pod.selectors)
-        asgs = self.cluster.autoscaling_groups.get_all_groups([])
-        self.cluster.autoscaling_timeouts.refresh_timeouts = mock.Mock()
-        self.cluster.scale({selectors_hash: [pod]}, [], asgs, {}, [])
-
-        response = self.asg_client.describe_auto_scaling_groups()
-        self.assertEqual(len(response['AutoScalingGroups']), 1)
-        self.assertGreater(response['AutoScalingGroups'][0]['DesiredCapacity'], 0)
-
-    def test_scale_up_for_reservation(self):
-        reservation = self._create_reservation('test', 2, [])
-        selectors_hash = utils.selectors_to_hash(reservation.node_selectors)
-        asgs = self.cluster.autoscaling_groups.get_all_groups([])
-        self.cluster.fulfill_pending(asgs, selectors_hash, [], [reservation])
-
-        response = self.asg_client.describe_auto_scaling_groups()
-        self.assertEqual(len(response['AutoScalingGroups']), 1)
-        self.assertGreater(response['AutoScalingGroups'][0]['DesiredCapacity'], 0)
-
-    @mock.patch('autoscaler.kube.KubeNode.reservation_id', new_callable=mock.PropertyMock)
-    def test_assign_reserved_nodes(self, mock_reservation_id_property):
-        def mock_setter(_, obj, value):
-            obj.selectors['openai.org/reservation-id'] = value
-
-        def mock_getter(_, obj, obj_type):
-            return obj.selectors.get('openai.org/reservation-id')
-
-        mock_reservation_id_property.__set__ = mock_setter
-        mock_reservation_id_property.__get__ = mock_getter
-
-        nodes = self._spin_up_nodes(3)
-        busy_node = nodes[0]
-        pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
-        reservation = self._create_reservation('test', 1, nodes)
-
-        pending_reservations = self.cluster.assign_nodes_to_reservations(nodes, {busy_node.name: [pod]}, {reservation.id: reservation})
-        self.assertFalse(pending_reservations)
-        self.assertIsNone(busy_node.reservation_id)
-        self.assertTrue({nodes[1].reservation_id, nodes[2].reservation_id} == {reservations.DEFAULT_ID, reservation.id})
 
     def test_timed_out_group(self):
         with mock.patch('autoscaler.autoscaling_groups.AutoScalingGroup.is_timed_out') as is_timed_out:
@@ -273,7 +216,7 @@ class TestCluster(unittest.TestCase):
                 pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
                 selectors_hash = utils.selectors_to_hash(pod.selectors)
                 asgs = self.cluster.autoscaling_groups.get_all_groups([])
-                self.cluster.fulfill_pending(asgs, selectors_hash, [pod], [])
+                self.cluster.fulfill_pending(asgs, selectors_hash, [pod])
 
                 scale.assert_not_called()
 
@@ -301,8 +244,7 @@ class TestCluster(unittest.TestCase):
         self.cluster.LAUNCH_HOUR_THRESHOLD['aws'] = -1
         self.cluster.maintain(
             managed_nodes, running_insts_map,
-            pods_to_schedule, running_or_pending_assigned_pods, asgs,
-            {})
+            pods_to_schedule, running_or_pending_assigned_pods, asgs)
 
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -328,8 +270,7 @@ class TestCluster(unittest.TestCase):
         self.cluster.LAUNCH_HOUR_THRESHOLD['aws'] = 60*30
         self.cluster.maintain(
             managed_nodes, running_insts_map,
-            pods_to_schedule, running_or_pending_assigned_pods, asgs,
-            {})
+            pods_to_schedule, running_or_pending_assigned_pods, asgs)
 
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -353,8 +294,7 @@ class TestCluster(unittest.TestCase):
 
         self.cluster.maintain(
             managed_nodes, running_insts_map,
-            pods_to_schedule, running_or_pending_assigned_pods, asgs,
-            {})
+            pods_to_schedule, running_or_pending_assigned_pods, asgs)
 
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -391,12 +331,12 @@ class TestCluster(unittest.TestCase):
         for pods in pod_scenarios:
             state = self.cluster.get_node_state(
                 node, asgs[0], pods, pods_to_schedule,
-                running_insts_map, collections.Counter(), {}, {})
+                running_insts_map, collections.Counter())
             self.assertEqual(state, ClusterNodeState.BUSY)
 
             self.cluster.maintain(
                 managed_nodes, running_insts_map,
-                pods_to_schedule, pods, asgs, {})
+                pods_to_schedule, pods, asgs)
 
             response = self.asg_client.describe_auto_scaling_groups()
             self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -439,12 +379,12 @@ class TestCluster(unittest.TestCase):
         for pods in pod_scenarios:
             state = self.cluster.get_node_state(
                 node, asgs[0], pods, pods_to_schedule,
-                running_insts_map, collections.Counter(), {}, {})
+                running_insts_map, collections.Counter())
             self.assertEqual(state, ClusterNodeState.UNDER_UTILIZED_UNDRAINABLE)
 
             self.cluster.maintain(
                 managed_nodes, running_insts_map,
-                pods_to_schedule, pods, asgs, {})
+                pods_to_schedule, pods, asgs)
 
             response = self.asg_client.describe_auto_scaling_groups()
             self.assertEqual(len(response['AutoScalingGroups']), 1)
@@ -476,12 +416,12 @@ class TestCluster(unittest.TestCase):
 
         state = self.cluster.get_node_state(
             node, asgs[0], pods, pods_to_schedule,
-            running_insts_map, collections.Counter(), {}, {})
+            running_insts_map, collections.Counter())
         self.assertEqual(state, ClusterNodeState.UNDER_UTILIZED_DRAINABLE)
 
         self.cluster.maintain(
             managed_nodes, running_insts_map,
-            pods_to_schedule, pods, asgs, {})
+            pods_to_schedule, pods, asgs)
 
         response = self.asg_client.describe_auto_scaling_groups()
         self.assertEqual(len(response['AutoScalingGroups']), 1)
