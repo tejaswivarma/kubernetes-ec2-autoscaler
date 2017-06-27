@@ -12,12 +12,10 @@ from autoscaler.kube import KubeResource
 with open(Config.CAPACITY_DATA, 'r') as f:
     data = json.loads(f.read())
     RESOURCE_SPEC = {}
-    for key, instance_map in data.items():
-        RESOURCE_SPEC[key] = {}
-        for instance_type, resource_spec in instance_map.items():
-            resource_spec['cpu'] -= Config.CAPACITY_CPU_RESERVE
-            resource = KubeResource(**resource_spec)
-            RESOURCE_SPEC[key][instance_type] = resource
+    for instance_type, resource_spec in data.items():
+        resource_spec['cpu'] -= Config.CAPACITY_CPU_RESERVE
+        resource = KubeResource(**resource_spec)
+        RESOURCE_SPEC[instance_type] = resource
 
 DEFAULT_TYPE_SELECTOR_KEYS = ('aws/type', 'azure/type')
 DEFAULT_CLASS_SELECTOR_KEYS = ('aws/class', 'azure/class')
@@ -38,7 +36,6 @@ def max_capacity_for_selectors(selectors, resource_requests):
     """
     returns the maximum capacity that is possible for the given selectors
     """
-    computing = selectors.get(COMPUTING_SELECTOR_KEY, 'false')
     selector = ''
     for key in DEFAULT_TYPE_SELECTOR_KEYS:
         if key in selectors:
@@ -50,7 +47,7 @@ def max_capacity_for_selectors(selectors, resource_requests):
             class_ = selectors[key]
             break
 
-    unit_caps = RESOURCE_SPEC[computing]
+    unit_caps = RESOURCE_SPEC
 
     # HACK: we modify our types with -modifier for special groups
     # e.g. c4.8xlarge-public
@@ -78,6 +75,4 @@ def get_unit_capacity(group):
     returns the KubeResource provided by one unit in the
     AutoScalingGroup or KubeNode
     """
-    computing = group.selectors.get(COMPUTING_SELECTOR_KEY, 'false')
-    unit_caps = RESOURCE_SPEC[computing]
-    return unit_caps[group.instance_type]
+    return RESOURCE_SPEC[group.instance_type]

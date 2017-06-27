@@ -158,9 +158,8 @@ class KubeNode(object):
                                 reverse_bytes(parts[2]),
                                 parts[3],
                                 parts[4]]).lower()
-        region = labels['azure/region']
         instance_type = labels['azure/type']
-        return (instance_id, region, instance_type, 'azure')
+        return (instance_id, 'placeholder', instance_type, 'azure')
 
     @property
     def selectors(self):

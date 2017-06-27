@@ -13,8 +13,6 @@ from autoscaler.utils import TransformingFuture, AllCompletedFuture, CompletedFu
 
 logger = logging.getLogger(__name__)
 
-LOCATION_SELECTOR = 'location_selector'
-
 
 _RETRY_TIME_LIMIT = 30
 
@@ -74,12 +72,11 @@ class AzureGroups(object):
         if self.client:
             for resource_group in self.resource_groups:
                 scale_sets_by_type = {}
-                location_selector = resource_group.tags.get(LOCATION_SELECTOR, resource_group.location)
                 for scale_set in self.client.list_scale_sets(resource_group.name):
                     scale_sets_by_type.setdefault((scale_set.location, scale_set.instance_type), []).append(scale_set)
                 for key, scale_sets in scale_sets_by_type.items():
                     location, instance_type = key
-                    groups.append(AzureVirtualScaleSet(location, location_selector, resource_group.name, self.client, instance_type, scale_sets, kube_nodes))
+                    groups.append(AzureVirtualScaleSet(location, resource_group.name, self.client, instance_type, scale_sets, kube_nodes))
 
         return groups
 
@@ -99,11 +96,10 @@ _SCALE_SET_SIZE_LIMIT = 40
 class AzureVirtualScaleSet(AutoScalingGroup):
     provider = 'azure'
 
-    def __init__(self, region, region_selector, resource_group, client: AzureApi, instance_type, scale_sets: List[AzureScaleSet], kube_nodes):
+    def __init__(self, region, resource_group, client: AzureApi, instance_type, scale_sets: List[AzureScaleSet], kube_nodes):
         self.client = client
         self.instance_type = instance_type
-        # TODO: Remove this. Legacy value indicating that this node is optimized for compute
-        self.tags = {'openai/computing': 'true'}
+        self.tags = {}
         self.name = 'virtual_scale_set_' + instance_type + '_' + region + '_' + resource_group
         self.scale_sets = dict((scale_set.name, scale_set) for scale_set in scale_sets)
         self.desired_capacity = sum(scale_set.capacity for scale_set in scale_sets)
@@ -114,7 +110,6 @@ class AzureVirtualScaleSet(AutoScalingGroup):
         self.selectors = dict(self.tags)
         # HACK: for matching node selectors
         self.selectors['azure/type'] = self.instance_type
-        self.selectors['azure/region'] = region_selector
         self.selectors['azure/class'] = _get_azure_class(self.instance_type)
 
         self.min_size = 0

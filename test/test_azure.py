@@ -28,7 +28,7 @@ class TestCluster(unittest.TestCase):
         resource_group = 'test-resource-group'
         scale_set = AzureScaleSet(region, resource_group, 'test-scale-set', instance_type, 0, 'Succeeded')
 
-        virtual_scale_set = AzureVirtualScaleSet(region, region, resource_group, AzureWrapper(mock_client, monitor_client), instance_type, [scale_set], [])
+        virtual_scale_set = AzureVirtualScaleSet(region, resource_group, AzureWrapper(mock_client, monitor_client), instance_type, [scale_set], [])
 
         virtual_scale_set.scale(5)
 
@@ -51,7 +51,7 @@ class TestCluster(unittest.TestCase):
         resource_group = 'test-resource-group'
         scale_set = AzureScaleSet(region, resource_group, 'test-scale-set', instance_type, 0, 'Succeeded',
                                   timeout_until=datetime.now(pytz.utc) + timedelta(minutes=10), timeout_reason="fake reason")
-        virtual_scale_set = AzureVirtualScaleSet(region, region, resource_group, AzureWrapper(mock_client, monitor_client), instance_type, [scale_set], [])
+        virtual_scale_set = AzureVirtualScaleSet(region, resource_group, AzureWrapper(mock_client, monitor_client), instance_type, [scale_set], [])
         self.assertTrue(virtual_scale_set.is_timed_out())
 
     def test_scale_in(self):
@@ -80,7 +80,7 @@ class TestCluster(unittest.TestCase):
         instance_type = 'Standard_D1_v2'
         scale_set = AzureScaleSet(region, resource_group, 'test-scale-set', instance_type, 1, 'Succeeded')
 
-        virtual_scale_set = AzureVirtualScaleSet(region, region, resource_group, AzureWrapper(mock_client, monitor_client), instance_type, [scale_set], [test_node])
+        virtual_scale_set = AzureVirtualScaleSet(region, resource_group, AzureWrapper(mock_client, monitor_client), instance_type, [scale_set], [test_node])
 
         self.assertEqual(virtual_scale_set.instance_ids, {instance.vm_id})
         self.assertEqual(virtual_scale_set.nodes, [test_node])
