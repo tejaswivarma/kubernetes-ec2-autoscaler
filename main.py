@@ -28,6 +28,7 @@ DEBUG_LOGGING_MAP = {
 @click.option("--type-idle-threshold", default=3600*24*7)
 @click.option("--over-provision", default=5)
 @click.option("--max-scale-in-fraction", default=0.1)
+@click.option("--azure-slow-scale-classes", default="")
 @click.option("--azure-resource-groups")
 @click.option("--azure-client-id", default=None, envvar='AZURE_CLIENT_ID')
 @click.option("--azure-client-secret", default=None, envvar='AZURE_CLIENT_SECRET')
@@ -51,7 +52,7 @@ DEBUG_LOGGING_MAP = {
                    "for more verbosity.",
               type=click.IntRange(0, 3, clamp=True),
               count=True)
-def main(cluster_name, aws_regions, azure_resource_groups, sleep, kubeconfig,
+def main(cluster_name, aws_regions, azure_resource_groups, azure_slow_scale_classes, sleep, kubeconfig,
          azure_client_id, azure_client_secret, azure_subscription_id, azure_tenant_id,
          aws_access_key, aws_secret_key, datadog_api_key,
          idle_threshold, type_idle_threshold, max_scale_in_fraction,
@@ -76,6 +77,7 @@ def main(cluster_name, aws_regions, azure_resource_groups, sleep, kubeconfig,
                       azure_subscription_id=azure_subscription_id,
                       azure_tenant_id=azure_tenant_id,
                       azure_resource_group_names=azure_resource_groups.split(',') if azure_resource_groups else [],
+                      azure_slow_scale_classes=azure_slow_scale_classes.split(',') if azure_slow_scale_classes else [],
                       kubeconfig=kubeconfig,
                       idle_threshold=idle_threshold,
                       instance_init_time=instance_init_time,

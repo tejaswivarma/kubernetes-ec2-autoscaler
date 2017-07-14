@@ -62,8 +62,9 @@ class AzureBoundedRetry(Retry):
 
 
 class AzureGroups(object):
-    def __init__(self, resource_groups, client: AzureApi):
+    def __init__(self, resource_groups, slow_scale_classes, client: AzureApi):
         self.resource_groups = resource_groups
+        self.slow_scale_classes = slow_scale_classes
         self.client = client
 
     def get_all_groups(self, kube_nodes):
@@ -76,7 +77,8 @@ class AzureGroups(object):
                     scale_sets_by_type.setdefault((scale_set.location, scale_set.instance_type), []).append(scale_set)
                 for key, scale_sets in scale_sets_by_type.items():
                     location, instance_type = key
-                    groups.append(AzureVirtualScaleSet(location, resource_group.name, self.client, instance_type, scale_sets, kube_nodes))
+                    slow_scale = _get_azure_class(instance_type) in self.slow_scale_classes
+                    groups.append(AzureVirtualScaleSet(location, resource_group.name, self.client, instance_type, slow_scale, scale_sets, kube_nodes))
 
         return groups
 
@@ -96,7 +98,7 @@ _SCALE_SET_SIZE_LIMIT = 40
 class AzureVirtualScaleSet(AutoScalingGroup):
     provider = 'azure'
 
-    def __init__(self, region, resource_group, client: AzureApi, instance_type, scale_sets: List[AzureScaleSet], kube_nodes):
+    def __init__(self, region, resource_group, client: AzureApi, instance_type, slow_scale: bool, scale_sets: List[AzureScaleSet], kube_nodes):
         self.client = client
         self.instance_type = instance_type
         self.tags = {}
@@ -111,6 +113,7 @@ class AzureVirtualScaleSet(AutoScalingGroup):
         # HACK: for matching node selectors
         self.selectors['azure/type'] = self.instance_type
         self.selectors['azure/class'] = _get_azure_class(self.instance_type)
+        self.slow_scale = slow_scale
 
         self.min_size = 0
         self.max_size = 10000
@@ -176,7 +179,10 @@ class AzureVirtualScaleSet(AutoScalingGroup):
         futures = []
         for scale_set in self.scale_sets.values():
             if scale_set.capacity < _SCALE_SET_SIZE_LIMIT:
-                new_group_capacity = min(_SCALE_SET_SIZE_LIMIT, scale_set.capacity + scale_out)
+                if self.slow_scale:
+                    new_group_capacity = scale_set.capacity + 1
+                else:
+                    new_group_capacity = min(_SCALE_SET_SIZE_LIMIT, scale_set.capacity + scale_out)
                 scale_out -= (new_group_capacity - scale_set.capacity)
                 if scale_set.provisioning_state == 'Updating':
                     logger.warn("Update of {} already in progress".format(scale_set.name))

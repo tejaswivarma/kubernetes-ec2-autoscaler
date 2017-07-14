@@ -82,7 +82,7 @@ class Cluster(object):
 
     def __init__(self, aws_regions, aws_access_key, aws_secret_key,
                  azure_client_id, azure_client_secret, azure_subscription_id, azure_tenant_id,
-                 azure_resource_group_names, kubeconfig,
+                 azure_resource_group_names, azure_slow_scale_classes, kubeconfig,
                  idle_threshold, type_idle_threshold,
                  instance_init_time, cluster_name, notifier,
                  max_scale_in_fraction=0.1,
@@ -149,7 +149,7 @@ class Cluster(object):
             monitor_client.config.retry_policy.policy = azure.AzureBoundedRetry.from_retry(monitor_client.config.retry_policy.policy)
             self.azure_client = AzureWriteThroughCachedApi(AzureWrapper(compute_client, monitor_client))
 
-        self.azure_groups = azure.AzureGroups(resource_groups, self.azure_client)
+        self.azure_groups = azure.AzureGroups(resource_groups, azure_slow_scale_classes, self.azure_client)
 
         # config
         self.azure_resource_group_names = azure_resource_group_names

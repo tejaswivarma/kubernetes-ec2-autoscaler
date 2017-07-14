@@ -90,6 +90,7 @@ class TestCluster(unittest.TestCase):
             azure_subscription_id='',
             azure_tenant_id='',
             azure_resource_group_names=[],
+            azure_slow_scale_classes=[],
             kubeconfig='~/.kube/config',
             idle_threshold=60,
             instance_init_time=60,
