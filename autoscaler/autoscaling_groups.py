@@ -391,6 +391,7 @@ class AutoScalingGroup(object):
         self.nodes = [node for node in kube_nodes
                       if node.instance_id in self.instance_ids]
         self.unschedulable_nodes = [n for n in self.nodes if n.unschedulable]
+        self.no_schedule_taints = {}
 
         self._id = (self.region, self.name)
 
@@ -513,6 +514,15 @@ class AutoScalingGroup(object):
     def is_match_for_selectors(self, selectors):
         for label, value in selectors.items():
             if self.selectors.get(label) != value:
+                return False
+        return True
+
+    def is_taints_tolerated(self, pod):
+        for label, value in pod.selectors.items():
+            if self.selectors.get(label) != value:
+                return False
+        for key in self.no_schedule_taints:
+            if not (pod.no_schedule_wildcard_toleration or key in pod.no_schedule_existential_tolerations):
                 return False
         return True
 

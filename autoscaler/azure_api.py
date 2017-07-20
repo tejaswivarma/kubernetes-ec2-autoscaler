@@ -6,7 +6,7 @@ from azure.monitor.models import EventData
 from copy import deepcopy
 from datetime import datetime, timedelta
 from threading import RLock, Condition
-from typing import List, Tuple, MutableMapping
+from typing import List, Tuple, MutableMapping, Mapping
 
 import pytz
 from abc import ABC
@@ -19,11 +19,14 @@ logger = logging.getLogger(__name__)
 
 
 PRIORITY_TAG = 'priority'
+# Value should be a json map of NoSchedule taint key-values
+NO_SCHEDULE_TAINTS_TAG = 'no_schedule_taints'
 
 
 class AzureScaleSet:
     def __init__(self, location: str, resource_group: str, name: str, instance_type: str, capacity: int,
-                 provisioning_state: str, timeout_until: datetime = None, timeout_reason: str = None, priority: int = None) -> None:
+                 provisioning_state: str, timeout_until: datetime = None, timeout_reason: str = None, priority: int = None,
+                 no_schedule_taints: Mapping[str, str] = {}) -> None:
         self.name = name
         self.instance_type = instance_type
         self.capacity = capacity
@@ -33,6 +36,7 @@ class AzureScaleSet:
         self.timeout_until = timeout_until
         self.timeout_reason = timeout_reason
         self.priority = priority
+        self.no_schedule_taints = no_schedule_taints
 
     def __str__(self):
         return 'AzureScaleSet({}, {}, {}, {})'.format(self.name, self.instance_type, self.capacity, self.provisioning_state)
@@ -42,7 +46,7 @@ class AzureScaleSet:
 
     def _key(self):
         return (self.name, self.instance_type, self.capacity, self.provisioning_state, self.resource_group, self.location,
-                self.timeout_until, self.timeout_reason, self.priority)
+                self.timeout_until, self.timeout_reason, self.priority, tuple(self.no_schedule_taints.items()))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, AzureScaleSet):
@@ -129,10 +133,11 @@ class AzureWrapper(AzureApi):
                     timeout_reason = failure.sub_status.localized_value
 
             priority = int(scale_set.tags[PRIORITY_TAG]) if PRIORITY_TAG in scale_set.tags else None
+            no_schedule_taints = json.loads(scale_set.tags.get(NO_SCHEDULE_TAINTS_TAG, '{}'))
 
             result.append(AzureScaleSet(scale_set.location, resource_group_name, scale_set.name, scale_set.sku.name,
                                         scale_set.sku.capacity, scale_set.provisioning_state, timeout_until=timeout_until,
-                                        timeout_reason=timeout_reason, priority=priority))
+                                        timeout_reason=timeout_reason, priority=priority, no_schedule_taints=no_schedule_taints))
         return result
 
     def list_scale_set_instances(self, scale_set: AzureScaleSet) -> List[AzureScaleSetInstance]:

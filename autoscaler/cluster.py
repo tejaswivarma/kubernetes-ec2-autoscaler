@@ -497,7 +497,7 @@ class Cluster(object):
             new_instance_resources = []
             assigned_pods = []
             for pod, acc in accounted_pods.items():
-                if acc or not (unit_capacity - pod.resources).possible:
+                if acc or not (unit_capacity - pod.resources).possible or not group.is_taints_tolerated(pod):
                     continue
 
                 found_fit = False
@@ -516,6 +516,9 @@ class Cluster(object):
             # fit on running nodes. This scaling is conservative but won't
             # create starving
             units_needed = len(new_instance_resources)
+            # The pods may not fit because of resource requests or taints. Don't scale in that case
+            if units_needed == 0:
+                continue
             units_needed += self.over_provision
 
             if self.autoscaling_timeouts.is_timed_out(group) or group.is_timed_out():

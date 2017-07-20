@@ -1,3 +1,4 @@
+import json
 import unittest
 import mock
 from datetime import datetime
@@ -7,7 +8,7 @@ from azure.mgmt.compute.models import VirtualMachineScaleSet, Sku
 from azure.monitor.models import EventData, LocalizableString
 
 from autoscaler.azure_api import AzureApi, AzureScaleSet, AzureWriteThroughCachedApi, \
-    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD, PRIORITY_TAG
+    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD, PRIORITY_TAG, NO_SCHEDULE_TAINTS_TAG
 from autoscaler.utils import CompletedFuture
 
 
@@ -211,7 +212,8 @@ class TestWriteThroughCache(unittest.TestCase):
 
 class TestWrapper(unittest.TestCase):
     def test_basic(self):
-        scale_set = VirtualMachineScaleSet('eastus', {PRIORITY_TAG: '1'}, sku=Sku('Standard_H16', capacity=1))
+        scale_set = VirtualMachineScaleSet('eastus', {PRIORITY_TAG: '1', NO_SCHEDULE_TAINTS_TAG: json.dumps({'gpu': 'yes'})},
+                                           sku=Sku('Standard_H16', capacity=1))
         scale_set.name = 'test'
         scale_set.provisioning_state = 'Succeeded'
         scale_set.id = 'fake_id'
@@ -227,7 +229,7 @@ class TestWrapper(unittest.TestCase):
         api = AzureWrapper(compute_client, monitor_client)
         resource_group = 'test_rg'
         expected = AzureScaleSet(scale_set.location, resource_group, scale_set.name, scale_set.sku.name, scale_set.sku.capacity,
-                                 scale_set.provisioning_state, priority=1)
+                                 scale_set.provisioning_state, priority=1, no_schedule_taints={'gpu': 'yes'})
         self.assertEqual([expected], api.list_scale_sets(resource_group))
 
         compute_client.virtual_machine_scale_sets.list.assert_called_once_with(resource_group)

@@ -55,6 +55,25 @@ class KubePod(object):
                 unitless_v = utils.parse_SI(v)
                 resource_requests[k] = resource_requests.get(k, 0.0) + unitless_v
         self.resources = KubeResource(pods=1, **resource_requests)
+        self.no_schedule_wildcard_toleration = False
+        self.no_execute_wildcard_toleration = False
+        self.no_schedule_existential_tolerations = set()
+        self.no_execute_existential_tolerations = set()
+        for toleration in pod.obj['spec'].get('tolerations', []):
+            if toleration.get('operator', 'Equal') == 'Exists':
+                effect = toleration.get('effect')
+                if effect is None or effect == 'NoSchedule':
+                    if 'key' not in toleration:
+                        self.no_schedule_wildcard_toleration = True
+                    else:
+                        self.no_schedule_existential_tolerations.add(toleration['key'])
+                if effect is None or effect == 'NoExecute':
+                    if 'key' not in toleration:
+                        self.no_execute_wildcard_toleration = True
+                    else:
+                        self.no_execute_existential_tolerations.add(toleration['key'])
+            else:
+                logger.warn("Equality tolerations not implemented. Pod {} has an equality toleration".format(pod))
 
     def is_mirrored(self):
         created_by = json.loads(self.annotations.get('kubernetes.io/created-by', '{}'))
@@ -130,6 +149,13 @@ class KubeNode(object):
             if condition.get('type') == 'Ready':
                 last_heartbeat_time = dateutil_parse(condition['lastHeartbeatTime'])
         self.last_heartbeat_time = last_heartbeat_time
+        self.no_schedule_taints = {}
+        self.no_execute_taints = {}
+        for taint in node.obj['spec'].get('taints', []):
+            if taint['effect'] == 'NoSchedule':
+                self.no_schedule_taints[taint['key']] = taint['value']
+            if taint['effect'] == 'NoExecute':
+                self.no_execute_taints[taint['key']] = taint['value']
 
     def _get_instance_data(self):
         """
@@ -227,12 +253,18 @@ class KubeNode(object):
         left = self.capacity - (self.used_capacity + resources)
         return left.possible
 
-    def is_match(self, pod):
+    def is_match(self, pod: KubePod):
         """
         whether this node matches all the selectors on the pod
         """
         for label, value in pod.selectors.items():
             if self.selectors.get(label) != value:
+                return False
+        for key in self.no_schedule_taints:
+            if not (pod.no_schedule_wildcard_toleration or key in pod.no_schedule_existential_tolerations):
+                return False
+        for key in self.no_execute_taints:
+            if not (pod.no_execute_wildcard_toleration or key in pod.no_execute_existential_tolerations):
                 return False
         return True
 

@@ -1,12 +1,16 @@
+import os
 import unittest
 from datetime import datetime, timedelta
 
 import collections
 import mock
+import pykube
 import pytz
+import yaml
 from azure.mgmt.compute.models import VirtualMachineScaleSetVM, \
     VirtualMachineInstanceView
 
+from autoscaler import KubePod
 from autoscaler.azure import AzureVirtualScaleSet
 from autoscaler.azure_api import AzureScaleSet, AzureWrapper
 
@@ -59,6 +63,35 @@ class TestCluster(unittest.TestCase):
         self.assertEqual(mock_client.virtual_machine_scale_sets.create_or_update.call_count, 2)
         self.assertEqual(mock_client.virtual_machine_scale_sets.create_or_update.call_args_list[0][1]['parameters'].sku.capacity, 1)
         self.assertEqual(mock_client.virtual_machine_scale_sets.create_or_update.call_args_list[1][1]['parameters'].sku.capacity, 1)
+
+    def test_tainted_scale_set(self):
+        region = 'test'
+        mock_client = mock.Mock()
+        mock_client.virtual_machine_scale_set_vms = mock.Mock()
+        mock_client.virtual_machine_scale_set_vms.list = mock.Mock(return_value=[])
+        mock_client.virtual_machine_scale_sets = mock.Mock()
+        mock_client.virtual_machine_scale_sets.create_or_update = mock.Mock()
+
+        monitor_client = mock.Mock()
+        monitor_client.activity_logs = mock.Mock()
+        monitor_client.activity_logs.list = mock.Mock(return_value=[])
+
+        instance_type = 'Standard_NC24'
+        resource_group = 'test-resource-group'
+        scale_set = AzureScaleSet(region, resource_group, 'test-scale-set', instance_type, 0, 'Succeeded', no_schedule_taints={'gpu': 'yes'})
+
+        virtual_scale_set = AzureVirtualScaleSet(region, resource_group, AzureWrapper(mock_client, monitor_client), instance_type, True, [scale_set], [])
+
+        dir_path = os.path.dirname(os.path.realpath(__file__))
+        with open(os.path.join(dir_path, 'data/busybox.yaml'), 'r') as f:
+            dummy_pod = yaml.load(f.read())
+        pod = KubePod(pykube.Pod(None, dummy_pod))
+
+        self.assertFalse(virtual_scale_set.is_taints_tolerated(pod))
+
+        dummy_pod['spec']['tolerations'] = [{'key': 'gpu', 'operator': 'Exists'}]
+        pod = KubePod(pykube.Pod(None, dummy_pod))
+        self.assertTrue(virtual_scale_set.is_taints_tolerated(pod))
 
     def test_out_of_quota(self):
         region = 'test'

@@ -124,6 +124,7 @@ class AzureVirtualScaleSet(AutoScalingGroup):
         self.timeout_until = None
         self.timeout_reason = None
         self._global_priority = None
+        self.no_schedule_taints = {}
         for scale_set in scale_sets:
             if scale_set.timeout_until is not None:
                 if self.timeout_until is None or self.timeout_until < scale_set.timeout_until:
@@ -134,6 +135,8 @@ class AzureVirtualScaleSet(AutoScalingGroup):
                     self._global_priority = scale_set.priority
                 else:
                     self._global_priority = max(scale_set.priority, self._global_priority)
+            if not self.no_schedule_taints:
+                self.no_schedule_taints = scale_set.no_schedule_taints
 
             if scale_set.capacity == 0:
                 continue
