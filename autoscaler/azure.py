@@ -134,7 +134,7 @@ class AzureVirtualScaleSet(AutoScalingGroup):
                 if self._global_priority is None:
                     self._global_priority = scale_set.priority
                 else:
-                    self._global_priority = max(scale_set.priority, self._global_priority)
+                    self._global_priority = min(scale_set.priority, self._global_priority)
             if not self.no_schedule_taints:
                 self.no_schedule_taints = scale_set.no_schedule_taints
 
@@ -180,7 +180,7 @@ class AzureVirtualScaleSet(AutoScalingGroup):
             return CompletedFuture(False)
 
         futures = []
-        for scale_set in self.scale_sets.values():
+        for scale_set in sorted(self.scale_sets.values(), key=lambda x: (x.priority, x.name)):
             if scale_set.capacity < _SCALE_SET_SIZE_LIMIT:
                 if self.slow_scale:
                     new_group_capacity = scale_set.capacity + 1

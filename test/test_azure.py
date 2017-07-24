@@ -39,6 +39,33 @@ class TestCluster(unittest.TestCase):
         mock_client.virtual_machine_scale_sets.create_or_update.assert_called_once()
         self.assertEqual(mock_client.virtual_machine_scale_sets.create_or_update.call_args[1]['parameters'].sku.capacity, 5)
 
+    def test_priority(self):
+        region = 'test'
+        mock_client = mock.Mock()
+        mock_client.virtual_machine_scale_set_vms = mock.Mock()
+        mock_client.virtual_machine_scale_set_vms.list = mock.Mock(return_value=[])
+        mock_client.virtual_machine_scale_sets = mock.Mock()
+        mock_client.virtual_machine_scale_sets.create_or_update = mock.Mock()
+
+        monitor_client = mock.Mock()
+        monitor_client.activity_logs = mock.Mock()
+        monitor_client.activity_logs.list = mock.Mock(return_value=[])
+
+        instance_type = 'Standard_D1_v2'
+        resource_group = 'test-resource-group'
+        scale_set = AzureScaleSet(region, resource_group, 'test-scale-set', instance_type, 0, 'Succeeded', priority=-1)
+        # Name sorts lexicographically before previous scale set, but priority is after it
+        scale_set2 = AzureScaleSet(region, resource_group, 'a-test-scale-set', instance_type, 0, 'Succeeded', priority=1)
+
+        virtual_scale_set = AzureVirtualScaleSet(region, resource_group, AzureWrapper(mock_client, monitor_client), instance_type, True, [scale_set, scale_set2], [])
+
+        virtual_scale_set.scale(1)
+
+        self.assertEqual(virtual_scale_set.global_priority, -1)
+
+        self.assertEqual(mock_client.virtual_machine_scale_sets.create_or_update.call_count, 1)
+        self.assertEqual(mock_client.virtual_machine_scale_sets.create_or_update.call_args_list[0][0][1], 'test-scale-set')
+
     def test_slow_scale_up(self):
         region = 'test'
         mock_client = mock.Mock()
