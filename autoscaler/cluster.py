@@ -314,7 +314,7 @@ class Cluster(object):
         - determines if there are bad nodes in ASGs (did not spin up under
           `instance_init_time` seconds)
         """
-        logger.info("++++++++++++++ Maintaining Managed Nodes ++++++++++++++++")
+        logger.info("++++++++++++++ Maintaining Nodes & Instances ++++++++++++++++")
 
         # for each type of instance, we keep one around for longer
         # in order to speed up job start up time
@@ -399,7 +399,6 @@ class Cluster(object):
             else:
                 raise Exception("Unhandled state: {}".format(state))
 
-        logger.info("++++++++++++++ Maintaining Unmanaged Instances ++++++++++++++++")
         # these are instances that have been running for a while but it's not properly managed
         #   i.e. not having registered to kube or not having proper meta data set
         managed_instance_ids = set(node.instance_id for node in cached_managed_nodes)
