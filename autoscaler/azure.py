@@ -91,7 +91,7 @@ def _get_azure_class(type_):
     return m.group('class')
 
 
-_SCALE_SET_SIZE_LIMIT = 40
+_SCALE_SET_SIZE_LIMIT = 100
 
 
 # Appears as an unbounded scale set. Currently, Azure Scale Sets have a limit of 100 hosts.
