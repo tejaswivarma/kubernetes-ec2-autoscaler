@@ -1,5 +1,68 @@
 import json
 import re
+from abc import ABC
+
+from threading import Lock
+
+
+# A callback that only triggers exactly once, after being called N times
+class CountDownCallback:
+    def __init__(self, count, delegate):
+        self._count = count
+        self._delegate = delegate
+        self._lock = Lock()
+
+    def __call__(self, *args, **kwargs):
+        self._lock.acquire()
+        self._count -= 1
+        if self._count == 0:
+            self._delegate(*args, **kwargs)
+        self._lock.release()
+
+
+class Future(ABC):
+    def result(self):
+        pass
+
+    def add_done_callback(self, fn):
+        pass
+
+
+class CompletedFuture(Future):
+    def __init__(self, value):
+        self._value = value
+
+    def result(self):
+        return self._value
+
+    def add_done_callback(self, fn):
+        fn(self)
+
+
+class TransformingFuture(Future):
+    def __init__(self, value, delegate):
+        self._value = value
+        self._delegate = delegate
+
+    def result(self):
+        self._delegate.result()
+        return self._value
+
+    def add_done_callback(self, fn):
+        self._delegate.add_done_callback(lambda _: fn(self))
+
+
+class AllCompletedFuture(Future):
+    def __init__(self, futures):
+        self._futures = futures
+
+    def result(self):
+        return [future.result() for future in self._futures]
+
+    def add_done_callback(self, fn):
+        callback = CountDownCallback(len(self._futures), lambda _: fn(self))
+        for future in self._futures:
+            future.add_done_callback(callback)
 
 
 def selectors_to_hash(selectors):
@@ -52,7 +115,7 @@ SI_suffix = {
     'Pi': 2**50,
     'Ei': 2**60,
 }
-SI_regex = re.compile(r"(\d+)(%s)?$" % "|".join(SI_suffix.keys()))
+SI_regex = re.compile(r"([0-9.]+)(%s)?$" % "|".join(SI_suffix.keys()))
 
 
 def parse_SI(s):

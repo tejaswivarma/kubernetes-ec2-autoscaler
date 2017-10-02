@@ -1,4 +1,4 @@
-FROM python:2.7-alpine
+FROM python:3.6-alpine
 
 RUN apk --update add --virtual build-dependencies \
       python-dev libffi-dev openssl-dev build-base && \
@@ -7,7 +7,7 @@ RUN apk --update add --virtual build-dependencies \
     apk add --no-cache bash git && \
     rm -rf /var/cache/apk/*
 
-COPY requirements.txt /app/requirements.txt
+COPY production-requirements.txt /app/requirements.txt
 RUN pip install -r /app/requirements.txt
 COPY . /app/
 WORKDIR /app

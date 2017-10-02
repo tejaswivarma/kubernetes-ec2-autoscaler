@@ -33,21 +33,47 @@ class KubePod(object):
         self.status = pod.obj['status']['phase']
         self.uid = metadata['uid']
         self.selectors = pod.obj['spec'].get('nodeSelector', {})
+        # TODO: Remove this, after everyone has migrated off reservations
+        if 'openai.org/reservation-id' in self.selectors:
+            del self.selectors['openai.org/reservation-id']
         self.labels = metadata.get('labels', {})
         self.annotations = metadata.get('annotations', {})
         self.owner = self.labels.get('owner', None)
         self.creation_time = dateutil_parse(metadata['creationTimestamp'])
         self.start_time = dateutil_parse(pod.obj['status']['startTime']) if 'startTime' in pod.obj['status'] else None
+        self.scheduled_time = None
+
+        for condition in pod.obj['status'].get('conditions', []):
+            if condition['type'] == 'PodScheduled' and condition['status'] == 'True':
+                self.scheduled_time = dateutil_parse(condition['lastTransitionTime'])
 
         # TODO: refactor
-        requests = map(lambda c: c.get('resources', {}).get('requests', {}),
-                       pod.obj['spec']['containers'])
+        requests = [c.get('resources', {}).get('requests', {}) for c in pod.obj['spec']['containers']]
         resource_requests = {}
         for d in requests:
             for k, v in d.items():
                 unitless_v = utils.parse_SI(v)
                 resource_requests[k] = resource_requests.get(k, 0.0) + unitless_v
         self.resources = KubeResource(pods=1, **resource_requests)
+        self.no_schedule_wildcard_toleration = False
+        self.no_execute_wildcard_toleration = False
+        self.no_schedule_existential_tolerations = set()
+        self.no_execute_existential_tolerations = set()
+        for toleration in pod.obj['spec'].get('tolerations', []):
+            if toleration.get('operator', 'Equal') == 'Exists':
+                effect = toleration.get('effect')
+                if effect is None or effect == 'NoSchedule':
+                    if 'key' not in toleration:
+                        self.no_schedule_wildcard_toleration = True
+                    else:
+                        self.no_schedule_existential_tolerations.add(toleration['key'])
+                if effect is None or effect == 'NoExecute':
+                    if 'key' not in toleration:
+                        self.no_execute_wildcard_toleration = True
+                    else:
+                        self.no_execute_existential_tolerations.add(toleration['key'])
+            else:
+                logger.warn("Equality tolerations not implemented. Pod {} has an equality toleration".format(pod))
 
     def is_mirrored(self):
         created_by = json.loads(self.annotations.get('kubernetes.io/created-by', '{}'))
@@ -66,10 +92,17 @@ class KubePod(object):
         determines whether the pod is in a grace period for draining
         this prevents us from draining pods that are too new
         """
-        return not self.start_time or (datetime.datetime.now(self.start_time.tzinfo) - self.start_time) < self._DRAIN_GRACE_PERIOD
+        return (self.scheduled_time and
+                (datetime.datetime.now(self.scheduled_time.tzinfo) - self.scheduled_time) < self._DRAIN_GRACE_PERIOD)
 
     def is_drainable(self):
-        return self.is_replicated() and not self.is_critical() and not self.is_in_drain_grace_period()
+        """
+        a pod is considered drainable if:
+        - it's a daemon
+        - it's a non-critical replicated pod that has exceeded grace period
+        """
+        return (self.is_mirrored() or
+                (self.is_replicated() and not self.is_critical() and not self.is_in_drain_grace_period()))
 
     def delete(self):
         logger.info('Deleting Pod %s/%s', self.namespace, self.name)
@@ -89,43 +122,86 @@ class KubePod(object):
         return str(self)
 
 
+def reverse_bytes(value):
+    assert len(value) % 2 == 0
+    result = ""
+    for i in range(len(value), 0, -2):
+        result += value[i - 2: i]
+    return result
+
+
 class KubeNode(object):
+    _HEARTBEAT_GRACE_PERIOD = datetime.timedelta(seconds=60*60)
+
     def __init__(self, node):
         self.original = node
         self.pykube_node = node
 
         metadata = node.obj['metadata']
         self.name = metadata['name']
-        self.instance_id, self.region, self.instance_type = self._get_instance_data()
-        self.selectors = metadata['labels']
+        self.instance_id, self.region, self.instance_type, self.provider = self._get_instance_data()
 
         self.capacity = KubeResource(**node.obj['status']['capacity'])
         self.used_capacity = KubeResource()
-        self.unschedulable = node.obj['spec'].get('unschedulable', False)
         self.creation_time = dateutil_parse(metadata['creationTimestamp'])
+        last_heartbeat_time = self.creation_time
+        for condition in node.obj['status'].get('conditions', []):
+            if condition.get('type') == 'Ready':
+                last_heartbeat_time = dateutil_parse(condition['lastHeartbeatTime'])
+        self.last_heartbeat_time = last_heartbeat_time
+        self.no_schedule_taints = {}
+        self.no_execute_taints = {}
+        for taint in node.obj['spec'].get('taints', []):
+            if taint['effect'] == 'NoSchedule':
+                self.no_schedule_taints[taint['key']] = taint['value']
+            if taint['effect'] == 'NoExecute':
+                self.no_execute_taints[taint['key']] = taint['value']
 
     def _get_instance_data(self):
         """
         returns a tuple (instance id, region, instance type)
         """
-        labels = self.original.obj['metadata']['labels']
+        labels = self.original.obj['metadata'].get('labels', {})
         instance_type = labels.get('aws/type', labels.get('beta.kubernetes.io/instance-type'))
 
         provider = self.original.obj['spec'].get('providerID', '')
         if provider.startswith('aws://'):
             az, instance_id = tuple(provider.split('/')[-2:])
-            return (instance_id, az[:-1], instance_type)
+            if az and instance_id:
+                return (instance_id, az[:-1], instance_type, 'aws')
 
         if labels.get('aws/id') and labels.get('aws/az'):
             instance_id = labels['aws/id']
             region = labels['aws/az'][:-1]
-            return (instance_id, region, instance_type)
+            return (instance_id, region, instance_type, 'aws')
 
-        return (None, '', None)
+        assert provider.startswith('azure:////'), provider
+        # Id is in wrong order: https://azure.microsoft.com/en-us/blog/accessing-and-using-azure-vm-unique-id/
+        big_endian_vm_id = provider.replace('azure:////', '')
+        parts = big_endian_vm_id.split('-')
+        instance_id = '-'.join([reverse_bytes(parts[0]),
+                                reverse_bytes(parts[1]),
+                                reverse_bytes(parts[2]),
+                                parts[3],
+                                parts[4]]).lower()
+        instance_type = labels['azure/type']
+        return (instance_id, 'placeholder', instance_type, 'azure')
+
+    @property
+    def selectors(self):
+        return self.original.obj['metadata'].get('labels', {})
+
+    @property
+    def unschedulable(self):
+        return self.original.obj['spec'].get('unschedulable', False)
+
+    @property
+    def can_uncordon(self):
+        return utils.parse_bool_label(self.selectors.get(_CORDON_LABEL))
 
     def drain(self, pods, notifier=None):
         for pod in pods:
-            if pod.is_drainable():
+            if pod.is_drainable() and not pod.is_mirrored():
                 pod.delete()
 
         logger.info("drained %s", self)
@@ -151,7 +227,7 @@ class KubeNode(object):
         try:
             self.original.reload()
             self.original.obj['spec']['unschedulable'] = True
-            self.original.obj['metadata']['labels'][_CORDON_LABEL] = 'true'
+            self.original.obj['metadata'].setdefault('labels', {})[_CORDON_LABEL] = 'true'
             self.original.update()
             logger.info("cordoned %s", self)
             return True
@@ -177,12 +253,18 @@ class KubeNode(object):
         left = self.capacity - (self.used_capacity + resources)
         return left.possible
 
-    def is_match(self, pod):
+    def is_match(self, pod: KubePod):
         """
         whether this node matches all the selectors on the pod
         """
         for label, value in pod.selectors.items():
             if self.selectors.get(label) != value:
+                return False
+        for key in self.no_schedule_taints:
+            if not (pod.no_schedule_wildcard_toleration or key in pod.no_schedule_existential_tolerations):
+                return False
+        for key in self.no_execute_taints:
+            if not (pod.no_execute_wildcard_toleration or key in pod.no_execute_existential_tolerations):
                 return False
         return True
 
@@ -191,6 +273,12 @@ class KubeNode(object):
         an instance is managed if we know its instance ID in ec2.
         """
         return self.instance_id is not None
+
+    def is_detached(self):
+        return utils.parse_bool_label(self.selectors.get('openai/detached'))
+
+    def is_dead(self):
+        return datetime.datetime.now(self.last_heartbeat_time.tzinfo) - self.last_heartbeat_time > self._HEARTBEAT_GRACE_PERIOD
 
     def __hash__(self):
         return hash(self.name)
@@ -255,4 +343,4 @@ class KubeResource(object):
 
     @property
     def possible(self):
-        return all(map(lambda x: x >= 0, self.raw.values()))
+        return all([x >= 0 for x in self.raw.values()])

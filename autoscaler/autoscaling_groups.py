@@ -1,16 +1,13 @@
 import datetime
 import logging
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 import botocore
-from pykube.objects import Pod
+import pytz
 
 import autoscaler.aws_utils as aws_utils
-import autoscaler.capacity as capacity
 import autoscaler.utils as utils
-
-# we are interested in all pods, incl. system ones
-Pod.objects.namespace = None
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +28,10 @@ class AutoScalingGroups(object):
         self.regions = regions
         self.cluster_name = cluster_name
 
-    def get_all_launch_configs(self, client, raw_groups):
+    @staticmethod
+    def get_all_raw_groups_and_launch_configs(client):
+        raw_groups = aws_utils.fetch_all(
+            client.describe_auto_scaling_groups, {'MaxRecords': 100}, 'AutoScalingGroups')
         all_launch_configs = {}
         batch_size = 50
         for launch_config_idx in range(0, len(raw_groups), batch_size):
@@ -44,33 +44,38 @@ class AutoScalingGroups(object):
                 kwargs, 'LaunchConfigurations')
             all_launch_configs.update((lc['LaunchConfigurationName'], lc)
                                       for lc in launch_configs)
-        return all_launch_configs
+        return raw_groups, all_launch_configs
 
     def get_all_groups(self, kube_nodes):
         groups = []
-        for region in self.regions:
-            client = self.session.client(self._BOTO_CLIENT_TYPE,
-                                         region_name=region)
-            raw_groups = aws_utils.fetch_all(
-                client.describe_auto_scaling_groups, {}, 'AutoScalingGroups')
+        with ThreadPoolExecutor(max_workers=max(1, len(self.regions))) as executor:
+            raw_groups_and_launch_configs = {}
+            for region in self.regions:
+                client = self.session.client(self._BOTO_CLIENT_TYPE,
+                                             region_name=region)
+                raw_groups_and_launch_configs[region] = executor.submit(
+                    AutoScalingGroups.get_all_raw_groups_and_launch_configs, client)
 
-            launch_configs = self.get_all_launch_configs(client, raw_groups)
+            for region in self.regions:
+                raw_groups, launch_configs = raw_groups_and_launch_configs[region].result()
 
-            for raw_group in sorted(raw_groups, key=lambda g: g['AutoScalingGroupName']):
-                if self.cluster_name:
-                    cluster_name = None
-                    role = None
-                    for tag in raw_group['Tags']:
-                        if tag['Key'] == self._CLUSTER_KEY:
-                            cluster_name = tag['Value']
-                        elif tag['Key'] in self._ROLE_KEYS:
-                            role = tag['Value']
-                    if cluster_name != self.cluster_name or role not in self._WORKER_ROLE_VALUES:
-                        continue
+                client = self.session.client(self._BOTO_CLIENT_TYPE,
+                                             region_name=region)
+                for raw_group in sorted(raw_groups, key=lambda g: g['AutoScalingGroupName']):
+                    if self.cluster_name:
+                        cluster_name = None
+                        role = None
+                        for tag in raw_group['Tags']:
+                            if tag['Key'] == self._CLUSTER_KEY:
+                                cluster_name = tag['Value']
+                            elif tag['Key'] in self._ROLE_KEYS:
+                                role = tag['Value']
+                        if cluster_name != self.cluster_name or role not in self._WORKER_ROLE_VALUES:
+                            continue
 
-                groups.append(AutoScalingGroup(
-                    client, region, kube_nodes, raw_group,
-                    launch_configs[raw_group['LaunchConfigurationName']]))
+                    groups.append(AutoScalingGroup(
+                        client, region, kube_nodes, raw_group,
+                        launch_configs[raw_group['LaunchConfigurationName']]))
 
         return groups
 
@@ -94,42 +99,88 @@ class AutoScalingTimeouts(object):
 
         # ASGs to avoid because of spot pricing history
         self._spot_timeouts = {}
+        self._spot_price_history = {}
 
     def refresh_timeouts(self, asgs, dry_run=False):
         """
         refresh timeouts on ASGs using new data from aws
         """
         self.time_out_spot_asgs(asgs)
-        for asg in asgs:
-            self.reconcile_limits(asg, dry_run=dry_run)
 
-    def reconcile_limits(self, asg, dry_run=False):
+        asgs_by_region = {}
+        for asg in asgs:
+            asgs_by_region.setdefault(asg.region, []).append(asg)
+
+        for region, regional_asgs in asgs_by_region.items():
+            client = self.session.client('autoscaling', region_name=region)
+            start_time_cutoff = None
+            newest_completed_activity = None
+            activities = {}
+            for activity in self.iter_activities(client):
+                if newest_completed_activity is None and activity['Progress'] == 100:
+                    newest_completed_activity = activity
+                if activity['ActivityId'] == self._last_activities.get(region, None):
+                    break
+                if start_time_cutoff is None:
+                    start_time_cutoff = (
+                        datetime.datetime.now(activity['StartTime'].tzinfo) -
+                        datetime.timedelta(seconds=self._TIMEOUT))
+                if activity['StartTime'] < start_time_cutoff:
+                    # skip events that are too old to cut down the time
+                    # it takes the first time to go through events
+                    break
+                activities.setdefault(activity['AutoScalingGroupName'], []).append(activity)
+
+            self._last_activities[region] = newest_completed_activity['ActivityId']
+            for asg in regional_asgs:
+                self.reconcile_limits(asg, activities.get(asg.name, []), dry_run=dry_run)
+
+    def iter_activities(self, client):
+        next_token = None
+        while True:
+            kwargs = {}
+            if next_token:
+                kwargs['NextToken'] = next_token
+            data = client.describe_scaling_activities(**kwargs)
+            for item in data['Activities']:
+                yield item
+            next_token = data.get('NextToken')
+            if not next_token:
+                break
+
+    def revert_capacity(self, asg, entry, dry_run):
+        """
+        try to decrease desired capacity to the original
+        capacity before the capacity increase that caused
+        the ASG activity entry.
+        """
+        cause_m = AutoScalingCauseMessages.LAUNCH_INSTANCE.search(entry.get('Cause', ''))
+        if cause_m:
+            original_capacity = int(cause_m.group('original_capacity'))
+            if asg.desired_capacity > original_capacity:
+                # we tried to go over capacity and failed
+                # now set the desired capacity back to a normal range
+                if not dry_run:
+                    asg.set_desired_capacity(original_capacity)
+                else:
+                    logger.info('[Dry run] Would have set desired capacity to %s', original_capacity)
+                return True
+        return False
+
+    def time_out_asg(self, asg, entry):
+        self._timeouts[asg._id] = (
+            entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT))
+        logger.info('%s is timed out until %s',
+                    asg.name, self._timeouts[asg._id])
+
+    def reconcile_limits(self, asg, activities, dry_run=False):
         """
         makes sure the ASG has valid capacity by processing errors
         in its recent scaling activities.
         marks an ASG as timed out if it recently had a capacity
         failure.
         """
-        start_time_cutoff = None
-        for entry in asg.iter_activities():
-            if entry['ActivityId'] == self._last_activities.get(asg._id):
-                # already processed the rest
-                return
-            if start_time_cutoff is None:
-                # won't process this activity twice
-                self._last_activities[asg._id] = entry['ActivityId']
-                start_time_cutoff = (
-                    datetime.datetime.now(entry['StartTime'].tzinfo) -
-                    datetime.timedelta(seconds=self._TIMEOUT))
-            if entry['StartTime'] < start_time_cutoff:
-                # skip events that are too old to cut down the time
-                # it takes the first time to go through events
-                break
-
-            # events that have partial progress are not considered processed
-            if entry['Progress'] < 100:
-                start_time_cutoff = None
-
+        for entry in activities:
             status_msg = entry.get('StatusMessage', '')
             if entry['StatusCode'] in ('Failed', 'Cancelled'):
                 logger.warn('%s scaling failure: %s', asg, entry)
@@ -138,9 +189,7 @@ class AutoScalingTimeouts(object):
                 if m:
                     max_desired_capacity = int(m.group('requested')) - 1
                     if asg.desired_capacity > max_desired_capacity:
-                        self._timeouts[asg._id] = entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT)
-                        logger.info('%s is timed out until %s',
-                                    asg.name, self._timeouts[asg._id])
+                        self.time_out_asg(asg, entry)
 
                         # we tried to go over capacity and failed
                         # now set the desired capacity back to a normal range
@@ -153,28 +202,21 @@ class AutoScalingTimeouts(object):
                 m = AutoScalingErrorMessages.VOLUME_LIMIT.match(status_msg)
                 if m:
                     # TODO: decrease desired capacity
-                    self._timeouts[asg._id] = entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT)
-                    logger.info('%s is timed out until %s',
-                                asg.name, self._timeouts[asg._id])
+                    self.time_out_asg(asg, entry)
                     return
 
                 m = AutoScalingErrorMessages.CAPACITY_LIMIT.match(status_msg)
                 if m:
-                    # try to decrease desired capacity
-                    cause_m = AutoScalingCauseMessages.LAUNCH_INSTANCE.search(entry.get('Cause', ''))
-                    if cause_m:
-                        original_capacity = int(cause_m.group('original_capacity'))
-                        if asg.desired_capacity > original_capacity:
-                            self._timeouts[asg._id] = entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT)
-                            logger.info('%s is timed out until %s',
-                                        asg.name, self._timeouts[asg._id])
+                    reverted = self.revert_capacity(asg, entry, dry_run)
+                    if reverted:
+                        self.time_out_asg(asg, entry)
+                    return
 
-                            # we tried to go over capacity and failed
-                            # now set the desired capacity back to a normal range
-                            if not dry_run:
-                                asg.set_desired_capacity(original_capacity)
-                            else:
-                                logger.info('[Dry run] Would have set desired capacity to %s', original_capacity)
+                m = AutoScalingErrorMessages.AZ_LIMIT.search(status_msg)
+                if m and 'only-az' in asg.name:
+                    reverted = self.revert_capacity(asg, entry, dry_run)
+                    if reverted:
+                        self.time_out_asg(asg, entry)
                     return
 
                 m = AutoScalingErrorMessages.SPOT_REQUEST_CANCELLED.search(status_msg)
@@ -185,9 +227,7 @@ class AutoScalingTimeouts(object):
 
                 m = AutoScalingErrorMessages.SPOT_LIMIT.match(status_msg)
                 if m:
-                    self._timeouts[asg._id] = entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT)
-                    logger.info('%s is timed out until %s',
-                                asg.name, self._timeouts[asg._id])
+                    self.time_out_asg(asg, entry)
 
                     if not dry_run:
                         asg.set_desired_capacity(asg.actual_capacity)
@@ -196,11 +236,20 @@ class AutoScalingTimeouts(object):
                     return
             elif entry['StatusCode'] == 'WaitingForSpotInstanceId':
                 logger.warn('%s waiting for spot: %s', asg, entry)
+
+                balance_cause_m = AutoScalingCauseMessages.AZ_BALANCE.search(entry.get('Cause', ''))
+                if balance_cause_m:
+                    # sometimes ASGs will launch instances in other az's to
+                    # balance out the group
+                    # ignore these events
+                    # even if we cancel it, the ASG will just attempt to
+                    # launch again
+                    logger.info('ignoring AZ balance launch event')
+                    continue
+
                 now = datetime.datetime.now(entry['StartTime'].tzinfo)
                 if (now - entry['StartTime']) > datetime.timedelta(seconds=self._SPOT_REQUEST_TIMEOUT):
-                    self._timeouts[asg._id] = entry['StartTime'] + datetime.timedelta(seconds=self._TIMEOUT)
-                    logger.info('%s is timed out until %s',
-                                asg.name, self._timeouts[asg._id])
+                    self.time_out_asg(asg, entry)
 
                     # try to cancel spot request and scale down ASG
                     spot_request_m = AutoScalingErrorMessages.SPOT_REQUEST_WAITING.search(status_msg)
@@ -225,7 +274,7 @@ class AutoScalingTimeouts(object):
         if timeout and datetime.datetime.now(timeout.tzinfo) < timeout:
             return True
 
-        if spot_timeout and datetime.datetime.utcnow() < spot_timeout:
+        if spot_timeout and datetime.datetime.now(pytz.utc) < spot_timeout:
             return True
 
         return False
@@ -244,6 +293,7 @@ class AutoScalingTimeouts(object):
             response = client.cancel_spot_instance_requests(
                 SpotInstanceRequestIds=[request_id]
             )
+            logger.info('Spot instance request %s cancelled.', request_id)
             return True
 
         return False
@@ -262,18 +312,25 @@ class AutoScalingTimeouts(object):
             instance_type = asg.launch_config['InstanceType']
             instance_asg_map.setdefault(instance_type, []).append(asg)
 
-        now = datetime.datetime.utcnow()
+        now = datetime.datetime.now(pytz.utc)
         since = now - datetime.timedelta(seconds=self._SPOT_HISTORY_PERIOD)
 
         for region, instance_asg_map in region_instance_asg_map.items():
+            # Expire old history
+            history = [item for item in self._spot_price_history.get(region, []) if item['Timestamp'] > since]
+            if history:
+                newest_spot_price = max(item['Timestamp'] for item in history)
+            else:
+                newest_spot_price = since
             client = self.session.client('ec2', region_name=region)
             kwargs = {
-                'StartTime': since,
-                'InstanceTypes': instance_asg_map.keys(),
+                'StartTime': newest_spot_price,
+                'InstanceTypes': list(instance_asg_map.keys()),
                 'ProductDescriptions': ['Linux/UNIX']
             }
-            history = aws_utils.fetch_all(
-                client.describe_spot_price_history, kwargs, 'SpotPriceHistory')
+            history.extend(aws_utils.fetch_all(
+                client.describe_spot_price_history, kwargs, 'SpotPriceHistory'))
+            self._spot_price_history[region] = history
             for instance_type, asgs in instance_asg_map.items():
                 for asg in asgs:
                     last_az_bid = {}
@@ -307,6 +364,8 @@ class AutoScalingTimeouts(object):
 
 
 class AutoScalingGroup(object):
+    provider = 'aws'
+
     def __init__(self, client, region, kube_nodes, raw_group, launch_config):
         """
         client - boto3 AutoScaling.Client
@@ -325,13 +384,14 @@ class AutoScalingGroup(object):
         self.max_size = raw_group['MaxSize']
 
         self.is_spot = launch_config.get('SpotPrice') is not None
+        self.instance_type = launch_config['InstanceType']
 
         self.instance_ids = set(inst['InstanceId'] for inst in raw_group['Instances']
                                 if inst.get('InstanceId'))
         self.nodes = [node for node in kube_nodes
                       if node.instance_id in self.instance_ids]
-        self.unschedulable_nodes = filter(
-            lambda n: n.unschedulable, self.nodes)
+        self.unschedulable_nodes = [n for n in self.nodes if n.unschedulable]
+        self.no_schedule_taints = {}
 
         self._id = (self.region, self.name)
 
@@ -352,9 +412,12 @@ class AutoScalingGroup(object):
 
         return selectors
 
+    def is_timed_out(self):
+        return False
+
     @property
-    def max_resource_capacity(self):
-        return self.max_size * capacity.get_unit_capacity(self)
+    def global_priority(self):
+        return 0
 
     @property
     def actual_capacity(self):
@@ -372,11 +435,12 @@ class AutoScalingGroup(object):
                                          DesiredCapacity=new_desired_capacity,
                                          HonorCooldown=False)
         self.desired_capacity = new_desired_capacity
+        return utils.CompletedFuture(True)
 
     def scale(self, new_desired_capacity):
         """
         scales the ASG to the new desired capacity.
-        returns True if desired capacity has been increased as a result.
+        returns a future with the result True if desired capacity has been increased.
         """
         desired_capacity = min(self.max_size, new_desired_capacity)
         num_unschedulable = len(self.unschedulable_nodes)
@@ -401,7 +465,7 @@ class AutoScalingGroup(object):
             if self.desired_capacity == self.max_size:
                 logger.info("Desired same as max, desired: {}, schedulable: {}".format(
                     self.desired_capacity, num_schedulable))
-                return False
+                return utils.CompletedFuture(False)
 
             scale_up = self.desired_capacity < desired_capacity
             # This should be a rare event
@@ -412,54 +476,37 @@ class AutoScalingGroup(object):
             if scale_up:
                 # should have gotten our num_schedulable to highest value possible
                 # actually need to grow.
-                self.set_desired_capacity(desired_capacity)
-                return True
+                return self.set_desired_capacity(desired_capacity)
 
         logger.info("Doing nothing: desired_capacity correctly set: {}, schedulable: {}".format(
             self.name, num_schedulable))
-        return False
+        return utils.CompletedFuture(False)
 
-    def scale_node_in(self, node):
+    def scale_nodes_in(self, nodes):
         """
         scale down asg by terminating the given node.
-        returns True if node was successfully terminated.
+        returns a future indicating when the request completes.
         """
-        try:
-            # if we somehow end up in a situation where we have
-            # more capacity than desired capacity, and the desired
-            # capacity is at asg min size, then when we try to
-            # terminate the instance while decrementing the desired
-            # capacity, the aws api call will fail
-            decrement_capacity = self.desired_capacity > self.min_size
-            self.client.terminate_instance_in_auto_scaling_group(
-                InstanceId=node.instance_id,
-                ShouldDecrementDesiredCapacity=decrement_capacity)
-            self.nodes.remove(node)
-            logger.info('Scaled node %s in', node)
-        except botocore.exceptions.ClientError as e:
-            if str(e).find("Terminating instance without replacement will "
-                           "violate group's min size constraint.") == -1:
-                raise e
-            logger.error("Failed to terminate instance: %s", e)
-            return False
+        for node in nodes:
+            try:
+                # if we somehow end up in a situation where we have
+                # more capacity than desired capacity, and the desired
+                # capacity is at asg min size, then when we try to
+                # terminate the instance while decrementing the desired
+                # capacity, the aws api call will fail
+                decrement_capacity = self.desired_capacity > self.min_size
+                self.client.terminate_instance_in_auto_scaling_group(
+                    InstanceId=node.instance_id,
+                    ShouldDecrementDesiredCapacity=decrement_capacity)
+                self.nodes.remove(node)
+                logger.info('Scaled node %s in', node)
+            except botocore.exceptions.ClientError as e:
+                if str(e).find("Terminating instance without replacement will "
+                               "violate group's min size constraint.") == -1:
+                    raise e
+                logger.error("Failed to terminate instance: %s", e)
 
-        return True
-
-    def iter_activities(self):
-        next_token = None
-        while True:
-            kwargs = {
-                'AutoScalingGroupName': self.name,
-                'MaxRecords': 10
-            }
-            if next_token:
-                kwargs['NextToken'] = next_token
-            data = self.client.describe_scaling_activities(**kwargs)
-            for item in data['Activities']:
-                yield item
-            next_token = data.get('NextToken')
-            if not next_token:
-                break
+        return utils.CompletedFuture(None)
 
     def contains(self, node):
         return node.instance_id in self.instance_ids
@@ -467,6 +514,15 @@ class AutoScalingGroup(object):
     def is_match_for_selectors(self, selectors):
         for label, value in selectors.items():
             if self.selectors.get(label) != value:
+                return False
+        return True
+
+    def is_taints_tolerated(self, pod):
+        for label, value in pod.selectors.items():
+            if self.selectors.get(label) != value:
+                return False
+        for key in self.no_schedule_taints:
+            if not (pod.no_schedule_wildcard_toleration or key in pod.no_schedule_existential_tolerations):
                 return False
         return True
 
@@ -484,7 +540,9 @@ class AutoScalingErrorMessages(object):
     SPOT_REQUEST_WAITING = re.compile(r'Placed Spot instance request: (?P<request_id>.+). Waiting for instance\(s\)')
     SPOT_REQUEST_CANCELLED = re.compile(r'Spot instance request: (?P<request_id>.+) has been cancelled\.')
     SPOT_LIMIT = re.compile(r'Max spot instance count exceeded\. Placing Spot instance request failed\.')
+    AZ_LIMIT = re.compile(r'We currently do not have sufficient .+ capacity in the Availability Zone you requested (.+)\.')
 
 
 class AutoScalingCauseMessages(object):
     LAUNCH_INSTANCE = re.compile(r'At \d\d\d\d-\d\d-\d\dT\d\d:\d\d:\d\dZ an instance was started in response to a difference between desired and actual capacity, increasing the capacity from (?P<original_capacity>\d+) to (?P<target_capacity>\d+)\.')
+    AZ_BALANCE = re.compile(r'An instance was launched to aid in balancing the group\'s zones\.')

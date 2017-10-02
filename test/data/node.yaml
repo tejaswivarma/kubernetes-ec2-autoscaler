@@ -53,9 +53,6 @@ status:
     - datadog/docker-dd-agent:kubernetes
     sizeBytes: 301845578
   - names:
-    - quay.io/openai/fluentd-aws:latest
-    sizeBytes: 719088118
-  - names:
     - nvidia/cuda:7.5-cudnn4-devel-ubuntu14.04
     sizeBytes: 1353527489
   - names:

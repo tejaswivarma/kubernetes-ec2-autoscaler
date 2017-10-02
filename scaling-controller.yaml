@@ -1,12 +1,10 @@
-apiVersion: v1
-kind: ReplicationController
+apiVersion: extensions/v1beta1
+kind: Deployment
 metadata:
   name: autoscaler
   namespace: system
 spec:
   replicas: 1
-  selector:
-    app: autoscaler
   template:
     metadata:
       labels:
@@ -15,7 +13,7 @@ spec:
     spec:
       containers:
       - name: autoscaler
-        image: quay.io/openai/kubernetes-ec2-autoscaler
+        image: quay.io/openai/kubernetes-ec2-autoscaler:azure
         env:
         - name: AWS_ACCESS_KEY_ID
           valueFrom:
@@ -42,15 +40,24 @@ spec:
             secretKeyRef:
               name: autoscaler
               key: datadog-api-key
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: autoscaler
+              key: sentry-dsn
         - name: PYKUBE_KUBERNETES_SERVICE_HOST
           value: 10.100.0.1
           # value: kubernetes.default
         - name: DATADOG_TAGS
           value: env:sci
+        - name: NAMESPACE
+          value: system.svc.sci.openai.org
         command:
             - python
             - main.py
-            - --regions
+            - --azure-regions
+            - us-east,us-south-central
+            - --aws-regions
             - us-west-2,us-east-1,us-west-1
             - --cluster-name
             - openai-kubernetes

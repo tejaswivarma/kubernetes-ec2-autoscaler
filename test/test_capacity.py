@@ -15,6 +15,9 @@ class TestCapacity(unittest.TestCase):
             dummy_pod = yaml.load(f.read())
         with open(os.path.join(dir_path, 'data/node.yaml'), 'r') as f:
             self.dummy_node = yaml.load(f.read())
+            # KubeNode expects these to be strings
+            for condition in self.dummy_node['status']['conditions']:
+                condition['lastHeartbeatTime'] = str(condition['lastHeartbeatTime'])
 
         # this isn't actually used here
         # only needed to create the KubePod object...
@@ -36,8 +39,8 @@ class TestCapacity(unittest.TestCase):
             'aws/type': 't2.micro'
         }
 
-        print repr(self.dummy_pod['metadata']['creationTimestamp'])
+        print(repr(self.dummy_pod['metadata']['creationTimestamp']))
         from dateutil.parser import parse as dateutil_parse
-        print dateutil_parse(self.dummy_pod['metadata']['creationTimestamp'])
+        print(dateutil_parse(self.dummy_pod['metadata']['creationTimestamp']))
         pod = KubePod(pykube.Pod(self.api, self.dummy_pod))
         assert not capacity.is_possible(pod)
