@@ -179,13 +179,15 @@ class AzureVirtualScaleSet(AutoScalingGroup):
         if scale_out == 0:
             return CompletedFuture(False)
 
+        remaining_instances = self.client.get_remaining_instances(self.resource_group, self.instance_type)
+
         futures = []
         for scale_set in sorted(self.scale_sets.values(), key=lambda x: (x.priority, x.name)):
             if scale_set.capacity < _SCALE_SET_SIZE_LIMIT:
                 if self.slow_scale:
                     new_group_capacity = scale_set.capacity + 1
                 else:
-                    new_group_capacity = min(_SCALE_SET_SIZE_LIMIT, scale_set.capacity + scale_out)
+                    new_group_capacity = min(_SCALE_SET_SIZE_LIMIT, scale_set.capacity + scale_out, scale_set.capacity + remaining_instances)
                 if scale_set.provisioning_state == 'Updating':
                     logger.warn("Update of {} already in progress".format(scale_set.name))
                     continue
@@ -193,11 +195,12 @@ class AzureVirtualScaleSet(AutoScalingGroup):
                     logger.error("{} failed provisioning. Skipping it for scaling.".format(scale_set.name))
                     continue
                 scale_out -= (new_group_capacity - scale_set.capacity)
+                remaining_instances -= (new_group_capacity - scale_set.capacity)
                 # Update our cached version
                 self.scale_sets[scale_set.name].capacity = new_group_capacity
                 futures.append(self.client.update_scale_set(scale_set, new_group_capacity))
                 logger.info("Scaling Azure Scale Set {} to {}".format(scale_set.name, new_group_capacity))
-            if scale_out == 0:
+            if scale_out == 0 or remaining_instances == 0:
                 break
 
         if scale_out > 0:

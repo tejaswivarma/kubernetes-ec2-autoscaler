@@ -1,5 +1,6 @@
 import logging
 import json
+import re
 
 from azure.monitor import MonitorClient
 from azure.monitor.models import EventData
@@ -12,6 +13,7 @@ import pytz
 from abc import ABC
 from azure.mgmt.compute import ComputeManagementClient
 from azure.mgmt.compute.models import VirtualMachineScaleSet, Sku
+from azure.mgmt.resource import ResourceManagementClient
 
 from autoscaler.utils import Future
 
@@ -94,14 +96,30 @@ class AzureApi(ABC):
     def terminate_scale_set_instances(self, scale_set: AzureScaleSet, instances: List[AzureScaleSetInstance]) -> Future:
         pass
 
+    def get_remaining_instances(self, resource_group_name: str, sku: str) -> int:
+        pass
+
 
 TIMEOUT_PERIOD = timedelta(minutes=15)
 
 
+# Mangles a SKU name into the family name used for quotas
+def _azure_sku_family(name: str) -> str:
+    match = re.match('Standard_(?P<family>[A-Z]{1,2})[0-9]{1,2}_?(?P<version>v[0-9])?', name)
+    if match is None:
+        raise ValueError("SKU not from a recognized family: " + name)
+    result = "standard" + match.group('family')
+    if match.group('version') is not None:
+        result += match.group('version')
+    result += 'Family'
+    return result
+
+
 class AzureWrapper(AzureApi):
-    def __init__(self, compute_client: ComputeManagementClient, monitor_client: MonitorClient) -> None:
+    def __init__(self, compute_client: ComputeManagementClient, monitor_client: MonitorClient, resource_client: ResourceManagementClient) -> None:
         self._compute_client = compute_client
         self._monitor_client = monitor_client
+        self._resource_client = resource_client
 
     def list_scale_sets(self, resource_group_name: str) -> List[AzureScaleSet]:
         fifteen_minutes_ago = datetime.now(pytz.utc) - TIMEOUT_PERIOD
@@ -161,6 +179,24 @@ class AzureWrapper(AzureApi):
         future = self._compute_client.virtual_machine_scale_sets.delete_instances(scale_set.resource_group, scale_set.name, [instance.instance_id for instance in instances])
         return AzureOperationPollerFutureAdapter(future)
 
+    def get_remaining_instances(self, resource_group_name: str, sku: str):
+        resource_group = self._resource_client.resource_groups.get(resource_group_name)
+        cores_per_instance = None
+        for vm_size in self._compute_client.virtual_machine_sizes.list(location=resource_group.location):
+            if vm_size.name == sku:
+                cores_per_instance = vm_size.number_of_cores
+
+        logger.warn("No metadata found for sku: " + sku)
+        if cores_per_instance is None:
+            return 0
+
+        for usage in self._compute_client.usage.list(location=resource_group.location):
+            if usage.name.value == _azure_sku_family(sku):
+                return (usage.limit - usage.current_value) // cores_per_instance
+
+        logger.warn("No quota found matching: " + sku)
+        return 0
+
 
 class AzureWriteThroughCachedApi(AzureApi):
     def __init__(self, delegate: AzureApi) -> None:
@@ -168,6 +204,7 @@ class AzureWriteThroughCachedApi(AzureApi):
         self._lock = RLock()
         self._instance_cache: MutableMapping[Tuple[str, str], List[AzureScaleSetInstance]] = {}
         self._scale_set_cache: MutableMapping[str, List[AzureScaleSet]] = {}
+        self._remaining_instances_cache: MutableMapping[str, MutableMapping[str, int]] = {}
 
     def list_scale_sets(self, resource_group_name: str, force_refresh=False) -> List[AzureScaleSet]:
         if not force_refresh:
@@ -214,6 +251,17 @@ class AzureWriteThroughCachedApi(AzureApi):
         future.add_done_callback(lambda _: self._invalidate(scale_set.resource_group, scale_set.name))
         return future
 
+    def get_remaining_instances(self, resource_group_name: str, sku: str):
+        with self._lock:
+            if resource_group_name in self._remaining_instances_cache:
+                cached = self._remaining_instances_cache[resource_group_name]
+                if sku in cached:
+                    return cached[sku]
+        remaining = self._delegate.get_remaining_instances(resource_group_name, sku)
+        with self._lock:
+            self._remaining_instances_cache.setdefault(resource_group_name, {})[sku] = remaining
+        return remaining
+
     def _invalidate(self, resource_group_name: str, scale_set_name: str) -> None:
         with self._lock:
             if (resource_group_name, scale_set_name) in self._instance_cache:
@@ -221,6 +269,9 @@ class AzureWriteThroughCachedApi(AzureApi):
 
             if resource_group_name in self._scale_set_cache:
                 del self._scale_set_cache[resource_group_name]
+
+            if resource_group_name in self._remaining_instances_cache:
+                del self._remaining_instances_cache[resource_group_name]
 
 
 _AZURE_API_MAX_WAIT = 10*60

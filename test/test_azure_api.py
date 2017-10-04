@@ -226,7 +226,7 @@ class TestWrapper(unittest.TestCase):
         monitor_client.activity_logs = mock.Mock()
         monitor_client.activity_logs.list = mock.Mock(return_value=[])
 
-        api = AzureWrapper(compute_client, monitor_client)
+        api = AzureWrapper(compute_client, monitor_client, None)
         resource_group = 'test_rg'
         expected = AzureScaleSet(scale_set.location, resource_group, scale_set.name, scale_set.sku.name, scale_set.sku.capacity,
                                  scale_set.provisioning_state, priority=1, no_schedule_taints={'gpu': 'yes'})
@@ -258,7 +258,7 @@ class TestWrapper(unittest.TestCase):
                                                                               properties={'statusCode': 'Conflict',
                                                                                           'statusMessage': message})])
 
-        api = AzureWrapper(compute_client, monitor_client)
+        api = AzureWrapper(compute_client, monitor_client, None)
         resource_group = 'test_rg'
         expected = AzureScaleSet(scale_set.location, resource_group, scale_set.name, scale_set.sku.name, scale_set.sku.capacity,
                                  scale_set.provisioning_state, now + TIMEOUT_PERIOD, reason)

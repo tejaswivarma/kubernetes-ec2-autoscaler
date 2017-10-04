@@ -151,7 +151,7 @@ class Cluster(object):
 
             monitor_client = MonitorClient(azure_credentials, azure_subscription_id)
             monitor_client.config.retry_policy.policy = azure.AzureBoundedRetry.from_retry(monitor_client.config.retry_policy.policy)
-            self.azure_client = AzureWriteThroughCachedApi(AzureWrapper(compute_client, monitor_client))
+            self.azure_client = AzureWriteThroughCachedApi(AzureWrapper(compute_client, monitor_client, resource_client))
 
         self.azure_groups = azure.AzureGroups(resource_groups, azure_slow_scale_classes, self.azure_client)
 
