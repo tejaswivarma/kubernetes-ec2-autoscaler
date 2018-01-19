@@ -186,8 +186,8 @@ class AzureWrapper(AzureApi):
             if vm_size.name == sku:
                 cores_per_instance = vm_size.number_of_cores
 
-        logger.warn("No metadata found for sku: " + sku)
         if cores_per_instance is None:
+            logger.warn("No metadata found for sku: " + sku)
             return 0
 
         for usage in self._compute_client.usage.list(location=resource_group.location):
