@@ -206,6 +206,11 @@ class AzureWriteThroughCachedApi(AzureApi):
         self._scale_set_cache: MutableMapping[str, List[AzureScaleSet]] = {}
         self._remaining_instances_cache: MutableMapping[str, MutableMapping[str, int]] = {}
 
+    def invalidate_quota_cache(self, resource_group_name: str) -> None:
+        with self._lock:
+            if resource_group_name in self._remaining_instances_cache:
+                del self._remaining_instances_cache[resource_group_name]
+
     def list_scale_sets(self, resource_group_name: str, force_refresh=False) -> List[AzureScaleSet]:
         if not force_refresh:
             with self._lock:

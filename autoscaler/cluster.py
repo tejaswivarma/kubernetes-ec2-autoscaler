@@ -215,6 +215,8 @@ class Cluster(object):
                     # Force a refresh of the cache to pick up any new Scale Sets that have been created
                     # or modified externally.
                     self.azure_client.list_scale_sets(resource_group, force_refresh=True)
+                    # Force a refresh of the cache in case our quota was adjusted
+                    self.azure_client.invalidate_quota_cache(resource_group)
             asgs = self.autoscaling_groups.get_all_groups(all_nodes)
             azure_groups = self.azure_groups.get_all_groups(all_nodes)
             scaling_groups = asgs + azure_groups
