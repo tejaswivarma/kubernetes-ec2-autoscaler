@@ -102,11 +102,11 @@ $ kubectl replace -f autoscaler-dep.yaml
 ```
 You should then be able to inspect the pod's status and logs:
 ```
-$ kubectl get pods --namespace system -l app=autoscaler
+$ kubectl get pods --namespace kube-system -l app=autoscaler
 NAME               READY     STATUS    RESTARTS   AGE
 autoscaler-opnax   1/1       Running   0          3s
 
-$ kubectl logs autoscaler-opnax --namespace system
+$ kubectl logs autoscaler-opnax --namespace kube-system
 2016-08-25 20:36:45,985 - autoscaler.cluster - DEBUG - Using kube service account
 2016-08-25 20:36:45,987 - autoscaler.cluster - INFO - ++++++++++++++ Running Scaling Loop ++++++++++++++++
 2016-08-25 20:37:04,221 - autoscaler.cluster - INFO - ++++++++++++++ Scaling Up Begins ++++++++++++++++
@@ -121,7 +121,7 @@ $ python main.py [options]
 ```
 
 - --cluster-name: Name of the Kubernetes cluster. Must match the value of the `KubernetesCluster` tag on Auto Scaling Groups.
-- --regions: List of comma-separated regions in order of preference. E.g. `us-west-2,us-east-1` will use "us-west-2" as the
+- --aws-regions: List of comma-separated regions in order of preference. E.g. `us-west-2,us-east-1` will use "us-west-2" as the
 primary region and "us-east-1" as the secondary.
 - --kubeconfig: Path to kubeconfig YAML file. Leave blank if running in Kubernetes to use [service account](http://kubernetes.io/docs/user-guide/service-accounts/).
 - --pod-namespace: The namespace to look for out-of-resource pods in. By default, this will look in all namespaces.
@@ -143,13 +143,13 @@ primary region and "us-east-1" as the secondary.
 ```
 # in your virtual env
 $ pip install -r requirements.txt
-$ python main.py --regions us-west-2,us-east-1,us-west-1 --cluster-name my-kubernetes --aws-access-key 'XXXXXXX' --aws-secret-key 'XXXXXXXXXXXXX' --dry-run -vvv --kubeconfig ~/.kube/config
+$ python main.py --aws-regions us-west-2,us-east-1,us-west-1 --cluster-name my-kubernetes --aws-access-key 'XXXXXXX' --aws-secret-key 'XXXXXXXXXXXXX' --dry-run -vvv --kubeconfig ~/.kube/config
 $ nosetests test/
 ```
 
 ### Docker
 ```
 $ docker build -t autoscaler .
-$ docker run -v $HOME/.kube/config:/root/.kube/config autoscaler python main.py --regions us-west-2,us-east-1,us-west-1 --cluster-name my-kubernetes --aws-access-key 'XXXXXXXXX' --aws-secret-key 'XXXXXXXXXXXXX' --dry-run -vvv --kubeconfig /root/.kube/config
+$ docker run -v $HOME/.kube/config:/root/.kube/config autoscaler python main.py --aws-regions us-west-2,us-east-1,us-west-1 --cluster-name my-kubernetes --aws-access-key 'XXXXXXXXX' --aws-secret-key 'XXXXXXXXXXXXX' --dry-run -vvv --kubeconfig /root/.kube/config
 $ docker run -v $HOME/.kube/config:/root/.kube/config autoscaler nosetests test/
 ```
