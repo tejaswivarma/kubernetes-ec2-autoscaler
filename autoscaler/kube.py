@@ -167,7 +167,7 @@ class KubeNode(object):
         self.instance_id, self.region, self.instance_type, self.provider = self._get_instance_data()
         self.pods = []
 
-        self.capacity = KubeResource(**node.obj['status']['capacity'])
+        self.capacity = KubeResource(**node.obj['status']['allocatable'])
         self.used_capacity = KubeResource()
         self.creation_time = dateutil_parse(metadata['creationTimestamp'])
         last_heartbeat_time = self.creation_time
