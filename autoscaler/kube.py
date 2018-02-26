@@ -33,9 +33,6 @@ class KubePod(object):
         self.status = pod.obj['status']['phase']
         self.uid = metadata['uid']
         self.selectors = pod.obj['spec'].get('nodeSelector', {})
-        # TODO: Remove this, after everyone has migrated off reservations
-        if 'openai.org/reservation-id' in self.selectors:
-            del self.selectors['openai.org/reservation-id']
         self.labels = metadata.get('labels', {})
         self.annotations = metadata.get('annotations', {})
         self.owner = self.labels.get('owner', None)
