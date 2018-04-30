@@ -9,9 +9,9 @@ JSON-log-formatter>=0.1.0
 pytz>=2016.10
 
 pykube>=0.14.0
-azure-mgmt-compute>=0.33.1rc1
-azure-mgmt-resource>=0.31.0
-azure-monitor>=0.3.0
+azure-mgmt-compute>=0.33.1rc1,<1.0.0
+azure-mgmt-resource>=0.31.0,<1.0.0
+azure-monitor>=0.3.0,<1.0.0
 
 # for instrumentation
 datadog>=0.14.0

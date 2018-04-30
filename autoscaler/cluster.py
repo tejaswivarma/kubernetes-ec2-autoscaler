@@ -60,10 +60,6 @@ class Cluster(object):
     # and having to spin up nodes for every job submission
     TYPE_IDLE_COUNT = 5
 
-    # the utilization threshold under which to consider a node
-    # under utilized and drainable
-    UTIL_THRESHOLD = 0.3
-
     # since we pay for the full hour, don't prematurely kill instances
     # the number of minutes into the launch hour at which an instance
     # is fine to kill
@@ -88,6 +84,7 @@ class Cluster(object):
                  azure_resource_group_names, azure_slow_scale_classes, kubeconfig,
                  idle_threshold, type_idle_threshold, pod_namespace,
                  instance_init_time, cluster_name, notifier,
+                 drain_utilization_below=0.0,
                  max_scale_in_fraction=0.1,
                  scale_up=True, maintainance=True,
                  datadog_api_key=None,
@@ -107,6 +104,7 @@ class Cluster(object):
         else:
             self.pod_namespace = pod_namespace
 
+        self.drain_utilization_below = drain_utilization_below
         self.max_scale_in_fraction = max_scale_in_fraction
         self._drained = {}
         self.session = None
@@ -725,7 +723,7 @@ class Cluster(object):
         busy_list = [p for p in node_pods if not p.is_mirrored()]
         undrainable_list = [p for p in node_pods if not p.is_drainable()]
         utilization = sum((p.resources for p in busy_list), KubeResource())
-        under_utilized = (self.UTIL_THRESHOLD *
+        under_utilized = (self.drain_utilization_below *
                           node.capacity - utilization).possible
         drainable = not undrainable_list
 
