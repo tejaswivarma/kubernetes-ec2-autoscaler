@@ -221,10 +221,10 @@ class AzureWriteThroughCachedApi(AzureApi):
         with self._lock:
             old_scale_sets = dict((x.name, x) for x in self._scale_set_cache.get(resource_group_name, []))
             for scale_set in scale_sets:
-                if scale_set.name not in old_scale_sets:
+                old_scale_set = old_scale_sets.get(scale_set.name)
+                if not old_scale_set:
                     continue
 
-                old_scale_set = old_scale_sets.get(scale_set.name)
                 # Check if Scale Set was changed externally
                 if old_scale_set.capacity != scale_set.capacity:
                     if (resource_group_name, scale_set.name) in self._instance_cache:
