@@ -84,6 +84,7 @@ class Cluster(object):
                  azure_resource_group_names, azure_slow_scale_classes, kubeconfig,
                  idle_threshold, type_idle_threshold, pod_namespace,
                  instance_init_time, cluster_name, notifier,
+                 use_aws_iam_role=False,
                  drain_utilization_below=0.0,
                  max_scale_in_fraction=0.1,
                  scale_up=True, maintainance=True,
@@ -113,6 +114,8 @@ class Cluster(object):
                 aws_access_key_id=aws_access_key,
                 aws_secret_access_key=aws_secret_key,
                 region_name=aws_regions[0])  # provide a default region
+        elif use_aws_iam_role is True:
+            self.session = boto3.session.Session(region_name=aws_regions[0])  # provide a default region
         self.autoscaling_groups = autoscaling_groups.AutoScalingGroups(
             session=self.session, regions=aws_regions,
             cluster_name=cluster_name)

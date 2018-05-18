@@ -129,6 +129,7 @@ primary region and "us-east-1" as the secondary.
 - --type-idle-threshold: For each instance type, we keep a few running and idle so the cluster has spare capacity for different types of requests. This defines the maximum duration (in seconds) for an instance to be kept idle.
 - --aws-access-key: AWS access key. Can also be specified in environment variable `AWS_ACCESS_KEY`
 - --aws-secret-key: AWS secret access key. Can also be specified in environment variable `AWS_SECRET_ACCESS_KEY`
+- --use-aws-iam-role: (default: False) If you want to use IAM roles instead of aws credentials, set this to True
 - --instance-init-time: Maximum duration (in seconds) after an instance is launched before being considered unhealthy (running in EC2 but not joining the Kubernetes cluster)
 - --sleep: Time (in seconds) to sleep between scaling loops (to be careful not to run into AWS API limits)
 - --slack-hook: Optional [Slack incoming webhook](https://api.slack.com/incoming-webhooks) for scaling notifications

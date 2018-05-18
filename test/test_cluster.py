@@ -99,7 +99,8 @@ class TestCluster(unittest.TestCase):
             type_idle_threshold=60,
             cluster_name='dummy-cluster',
             notifier=mock.Mock(),
-            dry_run=False
+            dry_run=False,
+            use_aws_iam_role=False
         )
 
     def tearDown(self):
