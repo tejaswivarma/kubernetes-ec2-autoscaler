@@ -1,0 +1,539 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.8	//
+ABC	../autoscaler/azure_api.py	/^from abc import ABC$/;"	kind:namespace	line:13
+ABC	../autoscaler/utils.py	/^from abc import ABC$/;"	kind:namespace	line:3
+ASG_MIN_SIZE	../autoscaler/cluster.py	/^    ASG_MIN_SIZE = 'asg-min-size'$/;"	kind:variable	line:41
+AZ_BALANCE	../autoscaler/autoscaling_groups.py	/^    AZ_BALANCE = re.compile(r'An instance was launched to aid in balancing the group\\'s zones\\.')$/;"	kind:variable	line:548
+AZ_LIMIT	../autoscaler/autoscaling_groups.py	/^    AZ_LIMIT = re.compile(r'We currently do not have sufficient .+ capacity in the Availability Zone you requested (.+)\\.')$/;"	kind:variable	line:543
+AllCompletedFuture	../autoscaler/azure.py	/^from autoscaler.utils import TransformingFuture, AllCompletedFuture, CompletedFuture$/;"	kind:namespace	line:12
+AllCompletedFuture	../autoscaler/utils.py	/^class AllCompletedFuture(Future):$/;"	kind:class	line:55
+AutoScalingCauseMessages	../autoscaler/autoscaling_groups.py	/^class AutoScalingCauseMessages(object):$/;"	kind:class	line:546
+AutoScalingErrorMessages	../autoscaler/autoscaling_groups.py	/^class AutoScalingErrorMessages(object):$/;"	kind:class	line:536
+AutoScalingGroup	../autoscaler/autoscaling_groups.py	/^class AutoScalingGroup(object):$/;"	kind:class	line:366
+AutoScalingGroup	../autoscaler/azure.py	/^from autoscaler.autoscaling_groups import AutoScalingGroup$/;"	kind:namespace	line:10
+AutoScalingGroups	../autoscaler/autoscaling_groups.py	/^class AutoScalingGroups(object):$/;"	kind:class	line:15
+AutoScalingTimeouts	../autoscaler/autoscaling_groups.py	/^class AutoScalingTimeouts(object):$/;"	kind:class	line:83
+AzureApi	../autoscaler/azure.py	/^from autoscaler.azure_api import AzureApi, AzureScaleSet, AzureScaleSetInstance$/;"	kind:namespace	line:11
+AzureApi	../autoscaler/azure_api.py	/^class AzureApi(ABC):$/;"	kind:class	line:86
+AzureApi	../test/test_azure_api.py	/^    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD, PRIORITY_TAG, NO_SCHEDULE_TAINTS_TAG$/;"	kind:namespace	line:11
+AzureBoundedRetry	../autoscaler/azure.py	/^class AzureBoundedRetry(Retry):$/;"	kind:class	line:20
+AzureGroups	../autoscaler/azure.py	/^class AzureGroups(object):$/;"	kind:class	line:64
+AzureInstance	../autoscaler/azure.py	/^class AzureInstance(object):$/;"	kind:class	line:248
+AzureOperationPollerFutureAdapter	../autoscaler/azure_api.py	/^class AzureOperationPollerFutureAdapter(Future):$/;"	kind:class	line:286
+AzureScaleSet	../autoscaler/azure.py	/^from autoscaler.azure_api import AzureApi, AzureScaleSet, AzureScaleSetInstance$/;"	kind:namespace	line:11
+AzureScaleSet	../autoscaler/azure_api.py	/^class AzureScaleSet:$/;"	kind:class	line:28
+AzureScaleSet	../test/test_azure.py	/^from autoscaler.azure_api import AzureScaleSet, AzureWrapper$/;"	kind:namespace	line:16
+AzureScaleSet	../test/test_azure_api.py	/^    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD, PRIORITY_TAG, NO_SCHEDULE_TAINTS_TAG$/;"	kind:namespace	line:11
+AzureScaleSetInstance	../autoscaler/azure.py	/^from autoscaler.azure_api import AzureApi, AzureScaleSet, AzureScaleSetInstance$/;"	kind:namespace	line:11
+AzureScaleSetInstance	../autoscaler/azure_api.py	/^class AzureScaleSetInstance:$/;"	kind:class	line:62
+AzureScaleSetInstance	../test/test_azure_api.py	/^    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD, PRIORITY_TAG, NO_SCHEDULE_TAINTS_TAG$/;"	kind:namespace	line:11
+AzureVirtualScaleSet	../autoscaler/azure.py	/^class AzureVirtualScaleSet(AutoScalingGroup):$/;"	kind:class	line:98
+AzureVirtualScaleSet	../test/test_azure.py	/^from autoscaler.azure import AzureVirtualScaleSet$/;"	kind:namespace	line:15
+AzureWrapper	../autoscaler/azure_api.py	/^class AzureWrapper(AzureApi):$/;"	kind:class	line:118
+AzureWrapper	../autoscaler/cluster.py	/^from autoscaler.azure_api import AzureWriteThroughCachedApi, AzureWrapper$/;"	kind:namespace	line:27
+AzureWrapper	../test/test_azure.py	/^from autoscaler.azure_api import AzureScaleSet, AzureWrapper$/;"	kind:namespace	line:16
+AzureWrapper	../test/test_azure_api.py	/^    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD, PRIORITY_TAG, NO_SCHEDULE_TAINTS_TAG$/;"	kind:namespace	line:11
+AzureWriteThroughCachedApi	../autoscaler/azure_api.py	/^class AzureWriteThroughCachedApi(AzureApi):$/;"	kind:class	line:201
+AzureWriteThroughCachedApi	../autoscaler/cluster.py	/^from autoscaler.azure_api import AzureWriteThroughCachedApi, AzureWrapper$/;"	kind:namespace	line:27
+AzureWriteThroughCachedApi	../test/test_azure_api.py	/^    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD, PRIORITY_TAG, NO_SCHEDULE_TAINTS_TAG$/;"	kind:namespace	line:11
+BUSY	../autoscaler/cluster.py	/^    BUSY = 'busy'$/;"	kind:variable	line:48
+BUSY_UNSCHEDULABLE	../autoscaler/cluster.py	/^    BUSY_UNSCHEDULABLE = 'busy-unschedulable'$/;"	kind:variable	line:47
+CAPACITY_CPU_RESERVE	../autoscaler/config.py	/^    CAPACITY_CPU_RESERVE = float(os.environ.get('CAPACITY_CPU_RESERVE', 0.0))$/;"	kind:variable	line:6
+CAPACITY_DATA	../autoscaler/config.py	/^    CAPACITY_DATA = os.environ.get('CAPACITY_DATA', 'data\/capacity.json')$/;"	kind:variable	line:5
+CAPACITY_LIMIT	../autoscaler/autoscaling_groups.py	/^    CAPACITY_LIMIT = re.compile(r'Insufficient capacity\\. Launching EC2 instance failed\\.')$/;"	kind:variable	line:539
+COMPUTING_SELECTOR_KEY	../autoscaler/capacity.py	/^COMPUTING_SELECTOR_KEY = 'openai\/computing'$/;"	kind:variable	line:22
+CONTAINER_CREATING	../autoscaler/kube.py	/^    CONTAINER_CREATING = 'ContainerCreating'$/;"	kind:variable	line:18
+CloudError	../autoscaler/cluster.py	/^from msrestazure.azure_exceptions import CloudError$/;"	kind:namespace	line:23
+Cluster	../autoscaler/cluster.py	/^class Cluster(object):$/;"	kind:class	line:55
+Cluster	../main.py	/^from autoscaler.cluster import Cluster$/;"	kind:namespace	line:7
+Cluster	../test/test_cluster.py	/^from autoscaler.cluster import Cluster, ClusterNodeState$/;"	kind:namespace	line:15
+ClusterNodeState	../autoscaler/cluster.py	/^class ClusterNodeState(Enum):$/;"	kind:class	line:38
+ClusterNodeState	../test/test_cluster.py	/^from autoscaler.cluster import Cluster, ClusterNodeState$/;"	kind:namespace	line:15
+CompletedFuture	../autoscaler/azure.py	/^from autoscaler.utils import TransformingFuture, AllCompletedFuture, CompletedFuture$/;"	kind:namespace	line:12
+CompletedFuture	../autoscaler/utils.py	/^class CompletedFuture(Future):$/;"	kind:class	line:31
+CompletedFuture	../test/test_azure_api.py	/^from autoscaler.utils import CompletedFuture$/;"	kind:namespace	line:12
+ComputeManagementClient	../autoscaler/azure_api.py	/^from azure.mgmt.compute import ComputeManagementClient$/;"	kind:namespace	line:14
+ComputeManagementClient	../autoscaler/cluster.py	/^from azure.mgmt.compute import ComputeManagementClient$/;"	kind:namespace	line:16
+Condition	../autoscaler/azure_api.py	/^from threading import RLock, Condition$/;"	kind:namespace	line:9
+Config	../autoscaler/capacity.py	/^from autoscaler.config import Config$/;"	kind:namespace	line:6
+Config	../autoscaler/config.py	/^class Config(object):$/;"	kind:class	line:4
+CountDownCallback	../autoscaler/utils.py	/^class CountDownCallback:$/;"	kind:class	line:9
+DEAD	../autoscaler/cluster.py	/^    DEAD = 'dead'$/;"	kind:variable	line:39
+DEBUG_LOGGING_MAP	../main.py	/^DEBUG_LOGGING_MAP = {$/;"	kind:variable	line:12
+DEFAULT_CLASS_SELECTOR_KEYS	../autoscaler/capacity.py	/^DEFAULT_CLASS_SELECTOR_KEYS = ('aws\/class', 'azure\/class')$/;"	kind:variable	line:21
+DEFAULT_TYPE_SELECTOR_KEYS	../autoscaler/capacity.py	/^DEFAULT_TYPE_SELECTOR_KEYS = ('aws\/type', 'azure\/type')$/;"	kind:variable	line:20
+DETACHED	../autoscaler/cluster.py	/^    DETACHED = 'detached'$/;"	kind:variable	line:52
+Enum	../autoscaler/cluster.py	/^from enum import Enum$/;"	kind:namespace	line:14
+EventData	../autoscaler/azure_api.py	/^from azure.monitor.models import EventData$/;"	kind:namespace	line:6
+EventData	../test/test_azure_api.py	/^from azure.monitor.models import EventData, LocalizableString$/;"	kind:namespace	line:8
+FAILED	../autoscaler/kube.py	/^    FAILED = 'Failed'$/;"	kind:variable	line:20
+Future	../autoscaler/azure_api.py	/^from autoscaler.utils import Future$/;"	kind:namespace	line:18
+Future	../autoscaler/utils.py	/^class Future(ABC):$/;"	kind:class	line:23
+GRACE_PERIOD	../autoscaler/cluster.py	/^    GRACE_PERIOD = 'grace-period'$/;"	kind:variable	line:43
+IDLE_SCHEDULABLE	../autoscaler/cluster.py	/^    IDLE_SCHEDULABLE = 'idle-schedulable'$/;"	kind:variable	line:45
+IDLE_UNSCHEDULABLE	../autoscaler/cluster.py	/^    IDLE_UNSCHEDULABLE = 'idle-unschedulable'$/;"	kind:variable	line:46
+INSTANCE_LIMIT	../autoscaler/autoscaling_groups.py	/^    INSTANCE_LIMIT = re.compile(r'You have requested more instances \\((?P<requested>\\d+)\\) than your current instance limit of (?P<limit>\\d+) allows for the specified instance type. Please visit http:\/\/aws.amazon.com\/contact-us\/ec2-request to request an adjustment to this limit. Launching EC2 instance failed.')$/;"	kind:variable	line:537
+INSTANCE_TERMINATED	../autoscaler/cluster.py	/^    INSTANCE_TERMINATED = 'instance-terminated'$/;"	kind:variable	line:40
+Iterable	../autoscaler/kube.py	/^from typing import Iterable, Mapping$/;"	kind:namespace	line:5
+KubeNode	../autoscaler/__init__.py	/^from autoscaler.kube import KubeNode$/;"	kind:namespace	line:3
+KubeNode	../autoscaler/cluster.py	/^from autoscaler.kube import KubePod, KubeNode, KubeResource, KubePodStatus$/;"	kind:namespace	line:29
+KubeNode	../autoscaler/kube.py	/^class KubeNode(object):$/;"	kind:class	line:158
+KubeNode	../test/test_capacity.py	/^from autoscaler.kube import KubeNode, KubePod$/;"	kind:namespace	line:8
+KubeNode	../test/test_cluster.py	/^from autoscaler.kube import KubePod, KubeNode$/;"	kind:namespace	line:16
+KubePod	../autoscaler/__init__.py	/^from autoscaler.kube import KubePod$/;"	kind:namespace	line:2
+KubePod	../autoscaler/cluster.py	/^from autoscaler.kube import KubePod, KubeNode, KubeResource, KubePodStatus$/;"	kind:namespace	line:29
+KubePod	../autoscaler/kube.py	/^class KubePod(object):$/;"	kind:class	line:25
+KubePod	../test/test_azure.py	/^from autoscaler import KubePod$/;"	kind:namespace	line:14
+KubePod	../test/test_capacity.py	/^from autoscaler.kube import KubeNode, KubePod$/;"	kind:namespace	line:8
+KubePod	../test/test_cluster.py	/^from autoscaler.kube import KubePod, KubeNode$/;"	kind:namespace	line:16
+KubePodStatus	../autoscaler/__init__.py	/^from autoscaler.kube import KubePodStatus$/;"	kind:namespace	line:1
+KubePodStatus	../autoscaler/cluster.py	/^from autoscaler.kube import KubePod, KubeNode, KubeResource, KubePodStatus$/;"	kind:namespace	line:29
+KubePodStatus	../autoscaler/kube.py	/^class KubePodStatus(object):$/;"	kind:class	line:15
+KubeResource	../autoscaler/__init__.py	/^from autoscaler.kube import KubeResource$/;"	kind:namespace	line:4
+KubeResource	../autoscaler/capacity.py	/^from autoscaler.kube import KubeResource$/;"	kind:namespace	line:7
+KubeResource	../autoscaler/cluster.py	/^from autoscaler.kube import KubePod, KubeNode, KubeResource, KubePodStatus$/;"	kind:namespace	line:29
+KubeResource	../autoscaler/kube.py	/^class KubeResource(object):$/;"	kind:class	line:329
+LAUNCH_HOUR_THRESHOLD	../autoscaler/cluster.py	/^    LAUNCH_HOUR_THRESHOLD = {$/;"	kind:variable	line:66
+LAUNCH_HR_GRACE_PERIOD	../autoscaler/cluster.py	/^    LAUNCH_HR_GRACE_PERIOD = 'launch-hr-grace-period'$/;"	kind:variable	line:51
+LAUNCH_INSTANCE	../autoscaler/autoscaling_groups.py	/^    LAUNCH_INSTANCE = re.compile(r'At \\d\\d\\d\\d-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ an instance was started in response to a difference between desired and actual capacity, increasing the capacity from (?P<original_capacity>\\d+) to (?P<target_capacity>\\d+)\\.')$/;"	kind:variable	line:547
+List	../autoscaler/azure.py	/^from typing import List, Tuple, MutableMapping$/;"	kind:namespace	line:3
+List	../autoscaler/azure_api.py	/^from typing import List, Tuple, MutableMapping, Mapping$/;"	kind:namespace	line:10
+LocalizableString	../test/test_azure_api.py	/^from azure.monitor.models import EventData, LocalizableString$/;"	kind:namespace	line:8
+Lock	../autoscaler/utils.py	/^from threading import Lock$/;"	kind:namespace	line:5
+MESSAGE_URL	../autoscaler/notification.py	/^    MESSAGE_URL = 'https:\/\/slack.com\/api\/chat.postMessage'$/;"	kind:variable	line:56
+Mapping	../autoscaler/azure_api.py	/^from typing import List, Tuple, MutableMapping, Mapping$/;"	kind:namespace	line:10
+Mapping	../autoscaler/kube.py	/^from typing import Iterable, Mapping$/;"	kind:namespace	line:5
+MonitorClient	../autoscaler/azure_api.py	/^from azure.monitor import MonitorClient$/;"	kind:namespace	line:5
+MonitorClient	../autoscaler/cluster.py	/^from azure.monitor import MonitorClient$/;"	kind:namespace	line:17
+MutableMapping	../autoscaler/azure.py	/^from typing import List, Tuple, MutableMapping$/;"	kind:namespace	line:3
+MutableMapping	../autoscaler/azure_api.py	/^from typing import List, Tuple, MutableMapping, Mapping$/;"	kind:namespace	line:10
+NAMESPACE	../autoscaler/config.py	/^    NAMESPACE = os.environ.get('NAMESPACE', 'system')$/;"	kind:variable	line:8
+NO_SCHEDULE_TAINTS_TAG	../autoscaler/azure_api.py	/^NO_SCHEDULE_TAINTS_TAG = 'no_schedule_taints'$/;"	kind:variable	line:25
+NO_SCHEDULE_TAINTS_TAG	../test/test_azure_api.py	/^    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD, PRIORITY_TAG, NO_SCHEDULE_TAINTS_TAG$/;"	kind:namespace	line:11
+Notifier	../autoscaler/notification.py	/^class Notifier(object):$/;"	kind:class	line:55
+Notifier	../main.py	/^from autoscaler.notification import Notifier$/;"	kind:namespace	line:8
+PENDING	../autoscaler/kube.py	/^    PENDING = 'Pending'$/;"	kind:variable	line:17
+POD_PENDING	../autoscaler/cluster.py	/^    POD_PENDING = 'pod-pending'$/;"	kind:variable	line:42
+PRIORITY_TAG	../autoscaler/azure_api.py	/^PRIORITY_TAG = 'priority'$/;"	kind:variable	line:23
+PRIORITY_TAG	../test/test_azure_api.py	/^    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD, PRIORITY_TAG, NO_SCHEDULE_TAINTS_TAG$/;"	kind:namespace	line:11
+RESOURCE_SPEC	../autoscaler/capacity.py	/^    RESOURCE_SPEC = {}$/;"	kind:variable	line:14
+RLock	../autoscaler/azure_api.py	/^from threading import RLock, Condition$/;"	kind:namespace	line:9
+RUNNING	../autoscaler/kube.py	/^    RUNNING = 'Running'$/;"	kind:variable	line:16
+ResourceGroup	../test/test_azure.py	/^from azure.mgmt.resource.resources.models import ResourceGroup$/;"	kind:namespace	line:12
+ResourceManagementClient	../autoscaler/azure_api.py	/^from azure.mgmt.resource import ResourceManagementClient$/;"	kind:namespace	line:16
+ResourceManagementClient	../autoscaler/cluster.py	/^from azure.mgmt.resource.resources import ResourceManagementClient$/;"	kind:namespace	line:21
+Retry	../autoscaler/azure.py	/^from requests.packages.urllib3 import Retry$/;"	kind:namespace	line:7
+SI_regex	../autoscaler/utils.py	/^SI_regex = re.compile(r"([0-9.]+)(%s)?$" % "|".join(SI_suffix.keys()))$/;"	kind:variable	line:118
+SI_suffix	../autoscaler/utils.py	/^SI_suffix = {$/;"	kind:variable	line:91
+SPOT_LIMIT	../autoscaler/autoscaling_groups.py	/^    SPOT_LIMIT = re.compile(r'Max spot instance count exceeded\\. Placing Spot instance request failed\\.')$/;"	kind:variable	line:542
+SPOT_REQUEST_CANCELLED	../autoscaler/autoscaling_groups.py	/^    SPOT_REQUEST_CANCELLED = re.compile(r'Spot instance request: (?P<request_id>.+) has been cancelled\\.')$/;"	kind:variable	line:541
+SPOT_REQUEST_WAITING	../autoscaler/autoscaling_groups.py	/^    SPOT_REQUEST_WAITING = re.compile(r'Placed Spot instance request: (?P<request_id>.+). Waiting for instance\\(s\\)')$/;"	kind:variable	line:540
+SUCCEEDED	../autoscaler/kube.py	/^    SUCCEEDED = 'Succeeded'$/;"	kind:variable	line:19
+ServicePrincipalCredentials	../autoscaler/cluster.py	/^from azure.common.credentials import ServicePrincipalCredentials$/;"	kind:namespace	line:22
+Sku	../autoscaler/azure_api.py	/^from azure.mgmt.compute.models import VirtualMachineScaleSet, Sku$/;"	kind:namespace	line:15
+Sku	../test/test_azure_api.py	/^from azure.mgmt.compute.models import VirtualMachineScaleSet, Sku$/;"	kind:namespace	line:7
+TIMEOUT_PERIOD	../autoscaler/azure_api.py	/^TIMEOUT_PERIOD = timedelta(minutes=15)$/;"	kind:variable	line:103
+TIMEOUT_PERIOD	../test/test_azure_api.py	/^    AzureScaleSetInstance, AzureWrapper, TIMEOUT_PERIOD, PRIORITY_TAG, NO_SCHEDULE_TAINTS_TAG$/;"	kind:namespace	line:11
+TTLCache	../autoscaler/notification.py	/^from cachetools import TTLCache, cachedmethod$/;"	kind:namespace	line:6
+TYPE_GRACE_PERIOD	../autoscaler/cluster.py	/^    TYPE_GRACE_PERIOD = 'type-grace-period'$/;"	kind:variable	line:44
+TYPE_IDLE_COUNT	../autoscaler/cluster.py	/^    TYPE_IDLE_COUNT = 5$/;"	kind:variable	line:61
+TestCapacity	../test/test_capacity.py	/^class TestCapacity(unittest.TestCase):$/;"	kind:class	line:11
+TestCluster	../test/test_azure.py	/^class TestCluster(unittest.TestCase):$/;"	kind:class	line:50
+TestCluster	../test/test_cluster.py	/^class TestCluster(unittest.TestCase):$/;"	kind:class	line:20
+TestWrapper	../test/test_azure_api.py	/^class TestWrapper(unittest.TestCase):$/;"	kind:class	line:213
+TestWriteThroughCache	../test/test_azure_api.py	/^class TestWriteThroughCache(unittest.TestCase):$/;"	kind:class	line:27
+TestingFuture	../test/test_azure_api.py	/^class TestingFuture:$/;"	kind:class	line:15
+ThreadPoolExecutor	../autoscaler/autoscaling_groups.py	/^from concurrent.futures import ThreadPoolExecutor$/;"	kind:namespace	line:4
+TransformingFuture	../autoscaler/azure.py	/^from autoscaler.utils import TransformingFuture, AllCompletedFuture, CompletedFuture$/;"	kind:namespace	line:12
+TransformingFuture	../autoscaler/utils.py	/^class TransformingFuture(Future):$/;"	kind:class	line:42
+Tuple	../autoscaler/azure.py	/^from typing import List, Tuple, MutableMapping$/;"	kind:namespace	line:3
+Tuple	../autoscaler/azure_api.py	/^from typing import List, Tuple, MutableMapping, Mapping$/;"	kind:namespace	line:10
+UNDER_UTILIZED_DRAINABLE	../autoscaler/cluster.py	/^    UNDER_UTILIZED_DRAINABLE = 'under-utilized-drainable'$/;"	kind:variable	line:49
+UNDER_UTILIZED_UNDRAINABLE	../autoscaler/cluster.py	/^    UNDER_UTILIZED_UNDRAINABLE = 'under-utilized-undrainable'$/;"	kind:variable	line:50
+Usage	../test/test_azure.py	/^    VirtualMachineInstanceView, VirtualMachineSize, Usage, UsageName$/;"	kind:namespace	line:11
+UsageName	../test/test_azure.py	/^    VirtualMachineInstanceView, VirtualMachineSize, Usage, UsageName$/;"	kind:namespace	line:11
+VOLUME_LIMIT	../autoscaler/autoscaling_groups.py	/^    VOLUME_LIMIT = re.compile(r'Instance became unhealthy while waiting for instance to be in InService state. Termination Reason: Client.VolumeLimitExceeded: Volume limit exceeded')$/;"	kind:variable	line:538
+VirtualMachineInstanceView	../test/test_azure.py	/^    VirtualMachineInstanceView, VirtualMachineSize, Usage, UsageName$/;"	kind:namespace	line:11
+VirtualMachineScaleSet	../autoscaler/azure_api.py	/^from azure.mgmt.compute.models import VirtualMachineScaleSet, Sku$/;"	kind:namespace	line:15
+VirtualMachineScaleSet	../test/test_azure_api.py	/^from azure.mgmt.compute.models import VirtualMachineScaleSet, Sku$/;"	kind:namespace	line:7
+VirtualMachineScaleSetVM	../test/test_azure.py	/^    VirtualMachineInstanceView, VirtualMachineSize, Usage, UsageName$/;"	kind:namespace	line:11
+VirtualMachineSize	../test/test_azure.py	/^    VirtualMachineInstanceView, VirtualMachineSize, Usage, UsageName$/;"	kind:namespace	line:11
+_AZURE_API_MAX_WAIT	../autoscaler/azure_api.py	/^_AZURE_API_MAX_WAIT = 10*60$/;"	kind:variable	line:282
+_BOTO_CLIENT_TYPE	../autoscaler/autoscaling_groups.py	/^    _BOTO_CLIENT_TYPE = 'autoscaling'$/;"	kind:variable	line:16
+_CLASS_PAT	../autoscaler/azure.py	/^_CLASS_PAT = re.compile(r'\\w+_(?P<class>[A-Z]+).+')$/;"	kind:variable	line:86
+_CLUSTER_KEY	../autoscaler/autoscaling_groups.py	/^    _CLUSTER_KEY = 'KubernetesCluster'$/;"	kind:variable	line:18
+_CORDON_LABEL	../autoscaler/kube.py	/^_CORDON_LABEL = 'openai\/cordoned-by-autoscaler'$/;"	kind:variable	line:22
+_DRAIN_GRACE_PERIOD	../autoscaler/kube.py	/^    _DRAIN_GRACE_PERIOD = datetime.timedelta(seconds=60*60)$/;"	kind:variable	line:26
+_GROUP_DEFAULT_PRIORITY	../autoscaler/cluster.py	/^    _GROUP_DEFAULT_PRIORITY = 10$/;"	kind:variable	line:73
+_GROUP_PRIORITIES	../autoscaler/cluster.py	/^    _GROUP_PRIORITIES = {$/;"	kind:variable	line:74
+_HEARTBEAT_GRACE_PERIOD	../autoscaler/kube.py	/^    _HEARTBEAT_GRACE_PERIOD = datetime.timedelta(seconds=60*60)$/;"	kind:variable	line:159
+_MAX_OUTBIDS_IN_INTERVAL	../autoscaler/autoscaling_groups.py	/^    _MAX_OUTBIDS_IN_INTERVAL = 60*20  # 20 minutes$/;"	kind:variable	line:86
+_RETRY_TIME_LIMIT	../autoscaler/azure.py	/^_RETRY_TIME_LIMIT = 30$/;"	kind:variable	line:17
+_ROLE_KEYS	../autoscaler/autoscaling_groups.py	/^    _ROLE_KEYS = ('KubernetesRole', 'Role')$/;"	kind:variable	line:19
+_SCALE_SET_SIZE_LIMIT	../autoscaler/azure.py	/^_SCALE_SET_SIZE_LIMIT = 300$/;"	kind:variable	line:94
+_SPOT_HISTORY_PERIOD	../autoscaler/autoscaling_groups.py	/^    _SPOT_HISTORY_PERIOD = 60*60*5  # 5 hours$/;"	kind:variable	line:87
+_SPOT_REQUEST_TIMEOUT	../autoscaler/autoscaling_groups.py	/^    _SPOT_REQUEST_TIMEOUT = 300  # 5 minutes$/;"	kind:variable	line:85
+_TIMEOUT	../autoscaler/autoscaling_groups.py	/^    _TIMEOUT = 3600  # 1 hour$/;"	kind:variable	line:84
+_WORKER_ROLE_VALUES	../autoscaler/autoscaling_groups.py	/^    _WORKER_ROLE_VALUES = ('worker', 'kubernetes-minion')$/;"	kind:variable	line:20
+__add__	../autoscaler/kube.py	/^    def __add__(self, other):$/;"	kind:member	line:335
+__call__	../autoscaler/utils.py	/^    def __call__(self, *args, **kwargs):$/;"	kind:member	line:15
+__cmp__	../autoscaler/kube.py	/^    def __cmp__(self, other):$/;"	kind:member	line:354
+__eq__	../autoscaler/azure_api.py	/^    def __eq__(self, other: object) -> bool:$/;"	kind:member	line:53
+__eq__	../autoscaler/azure_api.py	/^    def __eq__(self, other: object) -> bool:$/;"	kind:member	line:77
+__eq__	../autoscaler/kube.py	/^    def __eq__(self, other):$/;"	kind:member	line:124
+__eq__	../autoscaler/kube.py	/^    def __eq__(self, other):$/;"	kind:member	line:321
+__hash__	../autoscaler/azure_api.py	/^    def __hash__(self) -> int:$/;"	kind:member	line:58
+__hash__	../autoscaler/azure_api.py	/^    def __hash__(self) -> int:$/;"	kind:member	line:82
+__hash__	../autoscaler/kube.py	/^    def __hash__(self):$/;"	kind:member	line:121
+__hash__	../autoscaler/kube.py	/^    def __hash__(self):$/;"	kind:member	line:318
+__init__	../autoscaler/autoscaling_groups.py	/^    def __init__(self, client, region, kube_nodes, raw_group, launch_config):$/;"	kind:member	line:369
+__init__	../autoscaler/autoscaling_groups.py	/^    def __init__(self, session):$/;"	kind:member	line:89
+__init__	../autoscaler/autoscaling_groups.py	/^    def __init__(self, session, regions, cluster_name=None):$/;"	kind:member	line:22
+__init__	../autoscaler/azure.py	/^    def __init__(self, **kwargs):$/;"	kind:member	line:25
+__init__	../autoscaler/azure.py	/^    def __init__(self, instance_id, instance_type, launch_time, tags):$/;"	kind:member	line:251
+__init__	../autoscaler/azure.py	/^    def __init__(self, region, resource_group, client: AzureApi, instance_type, slow_scale: bool, scale_sets: List[AzureScaleSet], kube_nodes):$/;"	kind:member	line:101
+__init__	../autoscaler/azure.py	/^    def __init__(self, resource_groups, slow_scale_classes, client: AzureApi):$/;"	kind:member	line:65
+__init__	../autoscaler/azure_api.py	/^    def __init__(self, azure_operation):$/;"	kind:member	line:287
+__init__	../autoscaler/azure_api.py	/^    def __init__(self, compute_client: ComputeManagementClient, monitor_client: MonitorClient, resource_client: ResourceManagementClient) -> None:$/;"	kind:member	line:119
+__init__	../autoscaler/azure_api.py	/^    def __init__(self, delegate: AzureApi) -> None:$/;"	kind:member	line:202
+__init__	../autoscaler/azure_api.py	/^    def __init__(self, instance_id: str, vm_id: str, launch_time: datetime) -> None:$/;"	kind:member	line:63
+__init__	../autoscaler/azure_api.py	/^    def __init__(self, location: str, resource_group: str, name: str, instance_type: str, capacity: int,$/;"	kind:member	line:29
+__init__	../autoscaler/cluster.py	/^    def __init__(self, aws_regions, aws_access_key, aws_secret_key, use_aws_iam_role,$/;"	kind:member	line:82
+__init__	../autoscaler/kube.py	/^    def __init__(self, **kwargs):$/;"	kind:member	line:331
+__init__	../autoscaler/kube.py	/^    def __init__(self, node):$/;"	kind:member	line:161
+__init__	../autoscaler/kube.py	/^    def __init__(self, pod):$/;"	kind:member	line:28
+__init__	../autoscaler/notification.py	/^    def __init__(self, hook=None, bot_token=None):$/;"	kind:member	line:58
+__init__	../autoscaler/utils.py	/^    def __init__(self, count, delegate):$/;"	kind:member	line:10
+__init__	../autoscaler/utils.py	/^    def __init__(self, futures):$/;"	kind:member	line:56
+__init__	../autoscaler/utils.py	/^    def __init__(self, value):$/;"	kind:member	line:32
+__init__	../autoscaler/utils.py	/^    def __init__(self, value, delegate):$/;"	kind:member	line:43
+__init__	../test/test_azure_api.py	/^    def __init__(self):$/;"	kind:member	line:16
+__init__.py	../autoscaler/__init__.py	1;"	kind:file	line:1
+__mul__	../autoscaler/kube.py	/^    def __mul__(self, multiplier):$/;"	kind:member	line:347
+__repr__	../autoscaler/autoscaling_groups.py	/^    def __repr__(self):$/;"	kind:member	line:532
+__repr__	../autoscaler/azure.py	/^    def __repr__(self):$/;"	kind:member	line:244
+__repr__	../autoscaler/azure.py	/^    def __repr__(self):$/;"	kind:member	line:260
+__repr__	../autoscaler/azure_api.py	/^    def __repr__(self):$/;"	kind:member	line:46
+__repr__	../autoscaler/azure_api.py	/^    def __repr__(self):$/;"	kind:member	line:71
+__repr__	../autoscaler/kube.py	/^    def __repr__(self):$/;"	kind:member	line:131
+__rmul__	../autoscaler/kube.py	/^    def __rmul__(self, multiplier):$/;"	kind:member	line:351
+__str__	../autoscaler/autoscaling_groups.py	/^    def __str__(self):$/;"	kind:member	line:529
+__str__	../autoscaler/azure.py	/^    def __str__(self):$/;"	kind:member	line:241
+__str__	../autoscaler/azure.py	/^    def __str__(self):$/;"	kind:member	line:257
+__str__	../autoscaler/azure_api.py	/^    def __str__(self):$/;"	kind:member	line:43
+__str__	../autoscaler/azure_api.py	/^    def __str__(self):$/;"	kind:member	line:68
+__str__	../autoscaler/kube.py	/^    def __str__(self):$/;"	kind:member	line:127
+__str__	../autoscaler/kube.py	/^    def __str__(self):$/;"	kind:member	line:324
+__str__	../autoscaler/kube.py	/^    def __str__(self):$/;"	kind:member	line:373
+__sub__	../autoscaler/kube.py	/^    def __sub__(self, other):$/;"	kind:member	line:341
+_azure_sku_family	../autoscaler/azure_api.py	/^def _azure_sku_family(name: str) -> str:$/;"	kind:function	line:107
+_cache_key	../autoscaler/notification.py	/^def _cache_key(notifier, owner, message, pods):$/;"	kind:function	line:21
+_default_mock_clients	../test/test_azure.py	/^def _default_mock_clients(region, instances=[], quotas={'Dv2': 100, 'NC': 100}):$/;"	kind:function	line:19
+_extract_selectors	../autoscaler/autoscaling_groups.py	/^    def _extract_selectors(self, region, launch_config, tags_data):$/;"	kind:member	line:398
+_generate_pod_string	../autoscaler/notification.py	/^def _generate_pod_string(pods):$/;"	kind:function	line:33
+_get_azure_class	../autoscaler/azure.py	/^def _get_azure_class(type_):$/;"	kind:function	line:89
+_get_instance_data	../autoscaler/kube.py	/^    def _get_instance_data(self):$/;"	kind:member	line:189
+_get_required_capacity	../autoscaler/cluster.py	/^    def _get_required_capacity(self, requested, group):$/;"	kind:member	line:657
+_handle_completion	../autoscaler/azure_api.py	/^    def _handle_completion(self, result):$/;"	kind:member	line:298
+_invalidate	../autoscaler/azure_api.py	/^    def _invalidate(self, resource_group_name: str, scale_set_name: str) -> None:$/;"	kind:member	line:270
+_key	../autoscaler/azure_api.py	/^    def _key(self):$/;"	kind:member	line:49
+_key	../autoscaler/azure_api.py	/^    def _key(self):$/;"	kind:member	line:74
+_prioritize_groups	../autoscaler/cluster.py	/^    def _prioritize_groups(self, groups):$/;"	kind:member	line:674
+_spin_up_node	../test/test_cluster.py	/^    def _spin_up_node(self, launch_time=None):$/;"	kind:member	line:109
+_spin_up_nodes	../test/test_cluster.py	/^    def _spin_up_nodes(self, count, launch_time=None):$/;"	kind:member	line:112
+actual_capacity	../autoscaler/autoscaling_groups.py	/^    def actual_capacity(self):$/;"	kind:member	line:423
+add_done_callback	../autoscaler/azure_api.py	/^    def add_done_callback(self, fn):$/;"	kind:member	line:331
+add_done_callback	../autoscaler/utils.py	/^    def add_done_callback(self, fn):$/;"	kind:member	line:27
+add_done_callback	../autoscaler/utils.py	/^    def add_done_callback(self, fn):$/;"	kind:member	line:38
+add_done_callback	../autoscaler/utils.py	/^    def add_done_callback(self, fn):$/;"	kind:member	line:51
+add_done_callback	../autoscaler/utils.py	/^    def add_done_callback(self, fn):$/;"	kind:member	line:62
+add_done_callback	../test/test_azure_api.py	/^    def add_done_callback(self, fn):$/;"	kind:member	line:19
+autoscaler	../autoscaler/autoscaling_groups.py	/^import autoscaler.aws_utils as aws_utils$/;"	kind:namespace	line:9
+autoscaler	../autoscaler/autoscaling_groups.py	/^import autoscaler.utils as utils$/;"	kind:namespace	line:10
+autoscaler	../autoscaler/azure.py	/^import autoscaler.utils as utils$/;"	kind:namespace	line:9
+autoscaler	../autoscaler/cluster.py	/^import autoscaler.autoscaling_groups as autoscaling_groups$/;"	kind:namespace	line:25
+autoscaler	../autoscaler/cluster.py	/^import autoscaler.azure as azure$/;"	kind:namespace	line:26
+autoscaler	../autoscaler/cluster.py	/^import autoscaler.capacity as capacity$/;"	kind:namespace	line:28
+autoscaler	../autoscaler/cluster.py	/^import autoscaler.utils as utils$/;"	kind:namespace	line:30
+autoscaler	../autoscaler/kube.py	/^import autoscaler.utils as utils$/;"	kind:namespace	line:10
+autoscaler	../test/test_capacity.py	/^import autoscaler.capacity as capacity$/;"	kind:namespace	line:7
+autoscaler	../test/test_cluster.py	/^import autoscaler.utils as utils$/;"	kind:namespace	line:17
+autoscaling_groups	../autoscaler/cluster.py	/^import autoscaler.autoscaling_groups as autoscaling_groups$/;"	kind:namespace	line:25
+autoscaling_groups.py	../autoscaler/autoscaling_groups.py	1;"	kind:file	line:1
+aws_utils	../autoscaler/autoscaling_groups.py	/^import autoscaler.aws_utils as aws_utils$/;"	kind:namespace	line:9
+aws_utils.py	../autoscaler/aws_utils.py	1;"	kind:file	line:1
+azure	../autoscaler/cluster.py	/^import autoscaler.azure as azure$/;"	kind:namespace	line:26
+azure.py	../autoscaler/azure.py	1;"	kind:file	line:1
+azure_api.py	../autoscaler/azure_api.py	1;"	kind:file	line:1
+boto3	../autoscaler/cluster.py	/^import boto3$/;"	kind:namespace	line:8
+boto3	../test/test_cluster.py	/^import boto3$/;"	kind:namespace	line:8
+botocore	../autoscaler/autoscaling_groups.py	/^import botocore$/;"	kind:namespace	line:6
+botocore	../autoscaler/cluster.py	/^import botocore$/;"	kind:namespace	line:7
+botocore	../autoscaler/cluster.py	/^import botocore.exceptions$/;"	kind:namespace	line:9
+cachedmethod	../autoscaler/notification.py	/^from cachetools import TTLCache, cachedmethod$/;"	kind:namespace	line:6
+can_fit	../autoscaler/kube.py	/^    def can_fit(self, resources):$/;"	kind:member	line:281
+can_uncordon	../autoscaler/kube.py	/^    def can_uncordon(self):$/;"	kind:member	line:228
+cancel_spot_request	../autoscaler/autoscaling_groups.py	/^    def cancel_spot_request(self, region, request_id):$/;"	kind:member	line:282
+capacity	../autoscaler/cluster.py	/^import autoscaler.capacity as capacity$/;"	kind:namespace	line:28
+capacity	../test/test_capacity.py	/^import autoscaler.capacity as capacity$/;"	kind:namespace	line:7
+capacity.py	../autoscaler/capacity.py	1;"	kind:file	line:1
+click	../main.py	/^import click$/;"	kind:namespace	line:5
+cluster.py	../autoscaler/cluster.py	1;"	kind:file	line:1
+collections	../autoscaler/cluster.py	/^import collections$/;"	kind:namespace	line:1
+collections	../test/test_azure.py	/^import collections$/;"	kind:namespace	line:5
+collections	../test/test_cluster.py	/^import collections$/;"	kind:namespace	line:1
+complete	../test/test_azure_api.py	/^    def complete(self):$/;"	kind:member	line:22
+config.py	../autoscaler/config.py	1;"	kind:file	line:1
+contains	../autoscaler/autoscaling_groups.py	/^    def contains(self, node):$/;"	kind:member	line:511
+copy	../test/test_cluster.py	/^import copy$/;"	kind:namespace	line:5
+cordon	../autoscaler/kube.py	/^    def cordon(self):$/;"	kind:member	line:255
+count	../main.py	/^              count=True)$/;"	kind:variable	line:59
+count_pod	../autoscaler/kube.py	/^    def count_pod(self, pod):$/;"	kind:member	line:276
+data	../autoscaler/capacity.py	/^    data = json.loads(f.read())$/;"	kind:variable	line:13
+datadog	../autoscaler/cluster.py	/^import datadog$/;"	kind:namespace	line:10
+datetime	../autoscaler/autoscaling_groups.py	/^import datetime$/;"	kind:namespace	line:1
+datetime	../autoscaler/azure.py	/^from datetime import datetime$/;"	kind:namespace	line:4
+datetime	../autoscaler/azure_api.py	/^from datetime import datetime, timedelta$/;"	kind:namespace	line:8
+datetime	../autoscaler/cluster.py	/^import datetime$/;"	kind:namespace	line:2
+datetime	../autoscaler/kube.py	/^import datetime$/;"	kind:namespace	line:1
+datetime	../test/test_azure.py	/^from datetime import datetime, timedelta$/;"	kind:namespace	line:3
+datetime	../test/test_azure_api.py	/^from datetime import datetime$/;"	kind:namespace	line:4
+datetime	../test/test_cluster.py	/^from datetime import datetime, timedelta$/;"	kind:namespace	line:6
+dateutil_parse	../autoscaler/cluster.py	/^from dateutil.parser import parse as dateutil_parse$/;"	kind:namespace	line:19
+dateutil_parse	../autoscaler/kube.py	/^from dateutil.parser import parse as dateutil_parse$/;"	kind:namespace	line:7
+dateutil_parse	../test/test_capacity.py	/^        from dateutil.parser import parse as dateutil_parse$/;"	kind:namespace	line:43
+deepcopy	../autoscaler/azure_api.py	/^from copy import deepcopy$/;"	kind:namespace	line:7
+delete	../autoscaler/kube.py	/^    def delete(self):$/;"	kind:member	line:117
+delete	../autoscaler/kube.py	/^    def delete(self):$/;"	kind:member	line:267
+drain	../autoscaler/kube.py	/^    def drain(self, pods, notifier=None):$/;"	kind:member	line:231
+exceptions	../autoscaler/cluster.py	/^import botocore.exceptions$/;"	kind:namespace	line:9
+exceptions	../autoscaler/kube.py	/^import pykube.exceptions$/;"	kind:namespace	line:8
+fetch_all	../autoscaler/aws_utils.py	/^def fetch_all(aws_paged_func, kwargs, list_field, next_token=None):$/;"	kind:function	line:1
+find_packages	../setup.py	/^from setuptools import setup, find_packages$/;"	kind:namespace	line:1
+formatter	../autoscaler/notification.py	/^formatter = json_log_formatter.JSONFormatter()$/;"	kind:variable	line:13
+from_retry	../autoscaler/azure.py	/^    def from_retry(retry):$/;"	kind:member	line:29
+fulfill_pending	../autoscaler/cluster.py	/^    def fulfill_pending(self, asgs, selectors_hash, pods):$/;"	kind:member	line:479
+get	../autoscaler/kube.py	/^    def get(self, key, default=None):$/;"	kind:member	line:376
+get_all_groups	../autoscaler/autoscaling_groups.py	/^    def get_all_groups(self, kube_nodes):$/;"	kind:member	line:49
+get_all_groups	../autoscaler/azure.py	/^    def get_all_groups(self, kube_nodes):$/;"	kind:member	line:70
+get_all_raw_groups_and_launch_configs	../autoscaler/autoscaling_groups.py	/^    def get_all_raw_groups_and_launch_configs(client):$/;"	kind:member	line:32
+get_azure_instances	../autoscaler/azure.py	/^    def get_azure_instances(self):$/;"	kind:member	line:164
+get_group_for_node	../autoscaler/utils.py	/^def get_group_for_node(asgs, node):$/;"	kind:function	line:84
+get_groups_for_hash	../autoscaler/utils.py	/^def get_groups_for_hash(asgs, selectors_hash):$/;"	kind:function	line:72
+get_node_state	../autoscaler/cluster.py	/^    def get_node_state(self, node, asg, node_pods, pods_to_schedule,$/;"	kind:member	line:698
+get_pods_to_schedule	../autoscaler/cluster.py	/^    def get_pods_to_schedule(self, pods):$/;"	kind:member	line:797
+get_relevant_selectors	../autoscaler/utils.py	/^def get_relevant_selectors(node_selectors):$/;"	kind:function	line:141
+get_remaining_instances	../autoscaler/azure_api.py	/^    def get_remaining_instances(self, resource_group_name: str, sku: str) -> int:$/;"	kind:member	line:99
+get_remaining_instances	../autoscaler/azure_api.py	/^    def get_remaining_instances(self, resource_group_name: str, sku: str):$/;"	kind:member	line:182
+get_remaining_instances	../autoscaler/azure_api.py	/^    def get_remaining_instances(self, resource_group_name: str, sku: str):$/;"	kind:member	line:259
+get_retry_after	../autoscaler/azure.py	/^    def get_retry_after(self, response):$/;"	kind:member	line:41
+get_running_instances_in_region	../autoscaler/cluster.py	/^    def get_running_instances_in_region(self, region, instance_ids):$/;"	kind:member	line:583
+get_running_instances_map	../autoscaler/cluster.py	/^    def get_running_instances_map(self, nodes, azure_groups):$/;"	kind:member	line:626
+get_unit_capacity	../autoscaler/capacity.py	/^def get_unit_capacity(group):$/;"	kind:function	line:73
+global_priority	../autoscaler/autoscaling_groups.py	/^    def global_priority(self):$/;"	kind:member	line:419
+global_priority	../autoscaler/azure.py	/^    def global_priority(self):$/;"	kind:member	line:159
+handler	../autoscaler/notification.py	/^handler = logging.StreamHandler()$/;"	kind:variable	line:14
+hashlib	../autoscaler/notification.py	/^import hashlib$/;"	kind:namespace	line:1
+help	../main.py	/^              help="Sets the debug noise level, specify multiple times "$/;"	kind:variable	line:56
+help	../main.py	/^              help='Full path to kubeconfig file. If not provided, '$/;"	kind:variable	line:25
+help	../main.py	/^              help='Slack bot token. If provided, post scaling messages '$/;"	kind:variable	line:52
+help	../main.py	/^              help='Slack webhook URL. If provided, post scaling messages '$/;"	kind:variable	line:49
+help	../main.py	/^              help='The namespace to look for out-of-resource pods in. By '$/;"	kind:variable	line:28
+http	../autoscaler/azure.py	/^import http$/;"	kind:namespace	line:1
+install_requires	../setup.py	/^      install_requires=[$/;"	kind:variable	line:6
+instance_ids	../autoscaler/azure.py	/^    def instance_ids(self):$/;"	kind:member	line:168
+invalidate_quota_cache	../autoscaler/azure_api.py	/^    def invalidate_quota_cache(self, resource_group_name: str) -> None:$/;"	kind:member	line:209
+is_critical	../autoscaler/kube.py	/^    def is_critical(self):$/;"	kind:member	line:97
+is_dead	../autoscaler/kube.py	/^    def is_dead(self):$/;"	kind:member	line:315
+is_detached	../autoscaler/kube.py	/^    def is_detached(self):$/;"	kind:member	line:312
+is_drainable	../autoscaler/kube.py	/^    def is_drainable(self):$/;"	kind:member	line:108
+is_in_drain_grace_period	../autoscaler/kube.py	/^    def is_in_drain_grace_period(self):$/;"	kind:member	line:100
+is_managed	../autoscaler/kube.py	/^    def is_managed(self):$/;"	kind:member	line:306
+is_match	../autoscaler/kube.py	/^    def is_match(self, pod: KubePod):$/;"	kind:member	line:286
+is_match_for_selectors	../autoscaler/autoscaling_groups.py	/^    def is_match_for_selectors(self, selectors):$/;"	kind:member	line:514
+is_mirrored	../autoscaler/kube.py	/^    def is_mirrored(self):$/;"	kind:member	line:88
+is_possible	../autoscaler/capacity.py	/^def is_possible(pod):$/;"	kind:function	line:25
+is_replicated	../autoscaler/kube.py	/^    def is_replicated(self):$/;"	kind:member	line:93
+is_taints_tolerated	../autoscaler/autoscaling_groups.py	/^    def is_taints_tolerated(self, pod):$/;"	kind:member	line:520
+is_timed_out	../autoscaler/autoscaling_groups.py	/^    def is_timed_out(self):$/;"	kind:member	line:415
+is_timed_out	../autoscaler/autoscaling_groups.py	/^    def is_timed_out(self, asg):$/;"	kind:member	line:270
+is_timed_out	../autoscaler/azure.py	/^    def is_timed_out(self):$/;"	kind:member	line:152
+iter_activities	../autoscaler/autoscaling_groups.py	/^    def iter_activities(self, client):$/;"	kind:member	line:138
+json	../autoscaler/azure_api.py	/^import json$/;"	kind:namespace	line:2
+json	../autoscaler/capacity.py	/^import json$/;"	kind:namespace	line:4
+json	../autoscaler/kube.py	/^import json$/;"	kind:namespace	line:2
+json	../autoscaler/notification.py	/^import json$/;"	kind:namespace	line:2
+json	../autoscaler/utils.py	/^import json$/;"	kind:namespace	line:1
+json	../test/test_azure_api.py	/^import json$/;"	kind:namespace	line:1
+json	../test/test_cluster.py	/^import json$/;"	kind:namespace	line:2
+json_log_formatter	../autoscaler/notification.py	/^import json_log_formatter$/;"	kind:namespace	line:7
+kube.py	../autoscaler/kube.py	1;"	kind:file	line:1
+list_scale_set_instances	../autoscaler/azure_api.py	/^    def list_scale_set_instances(self, scale_set: AzureScaleSet) -> List[AzureScaleSetInstance]:$/;"	kind:member	line:161
+list_scale_set_instances	../autoscaler/azure_api.py	/^    def list_scale_set_instances(self, scale_set: AzureScaleSet) -> List[AzureScaleSetInstance]:$/;"	kind:member	line:236
+list_scale_set_instances	../autoscaler/azure_api.py	/^    def list_scale_set_instances(self, scale_set: AzureScaleSet) -> List[AzureScaleSetInstance]:$/;"	kind:member	line:90
+list_scale_sets	../autoscaler/azure_api.py	/^    def list_scale_sets(self, resource_group_name: str) -> List[AzureScaleSet]:$/;"	kind:member	line:124
+list_scale_sets	../autoscaler/azure_api.py	/^    def list_scale_sets(self, resource_group_name: str) -> List[AzureScaleSet]:$/;"	kind:member	line:87
+list_scale_sets	../autoscaler/azure_api.py	/^    def list_scale_sets(self, resource_group_name: str, force_refresh=False) -> List[AzureScaleSet]:$/;"	kind:member	line:214
+logger	../autoscaler/autoscaling_groups.py	/^logger = logging.getLogger(__name__)$/;"	kind:variable	line:12
+logger	../autoscaler/azure.py	/^logger = logging.getLogger(__name__)$/;"	kind:variable	line:14
+logger	../autoscaler/azure_api.py	/^logger = logging.getLogger(__name__)$/;"	kind:variable	line:20
+logger	../autoscaler/cluster.py	/^logger = logging.getLogger(__name__)$/;"	kind:variable	line:35
+logger	../autoscaler/kube.py	/^logger = logging.getLogger(__name__)$/;"	kind:variable	line:12
+logger	../autoscaler/notification.py	/^logger = logging.getLogger(__name__)$/;"	kind:variable	line:10
+logger	../main.py	/^logger = logging.getLogger('autoscaler')$/;"	kind:variable	line:10
+logging	../autoscaler/autoscaling_groups.py	/^import logging$/;"	kind:namespace	line:2
+logging	../autoscaler/azure.py	/^import logging$/;"	kind:namespace	line:2
+logging	../autoscaler/azure_api.py	/^import logging$/;"	kind:namespace	line:1
+logging	../autoscaler/cluster.py	/^import logging$/;"	kind:namespace	line:3
+logging	../autoscaler/kube.py	/^import logging$/;"	kind:namespace	line:3
+logging	../autoscaler/notification.py	/^import logging$/;"	kind:namespace	line:3
+logging	../main.py	/^import logging$/;"	kind:namespace	line:1
+main	../main.py	/^def main(cluster_name, aws_regions, azure_resource_groups, azure_slow_scale_classes, sleep, kubeconfig,$/;"	kind:function	line:60
+main.py	../main.py	1;"	kind:file	line:1
+maintain	../autoscaler/cluster.py	/^    def maintain(self, cached_managed_nodes, running_insts_map,$/;"	kind:member	line:316
+match_anti_affinity_expression	../autoscaler/kube.py	/^def match_anti_affinity_expression(and_expression: Iterable[Mapping], pod: KubePod):$/;"	kind:function	line:144
+math	../autoscaler/cluster.py	/^import math$/;"	kind:namespace	line:4
+max_capacity_for_selectors	../autoscaler/capacity.py	/^def max_capacity_for_selectors(selectors, resource_requests):$/;"	kind:function	line:35
+message_owner	../autoscaler/notification.py	/^    def message_owner(self, owner, message, pods):$/;"	kind:member	line:181
+message_owners	../autoscaler/notification.py	/^    def message_owners(self, message, pods):$/;"	kind:member	line:167
+mock	../test/test_azure.py	/^import mock$/;"	kind:namespace	line:6
+mock	../test/test_azure_api.py	/^import mock$/;"	kind:namespace	line:3
+mock	../test/test_cluster.py	/^import mock$/;"	kind:namespace	line:10
+moto	../test/test_cluster.py	/^import moto$/;"	kind:namespace	line:11
+notification.py	../autoscaler/notification.py	1;"	kind:file	line:1
+notify_drained_node	../autoscaler/notification.py	/^    def notify_drained_node(self, node, pods):$/;"	kind:member	line:144
+notify_failed_to_scale	../autoscaler/notification.py	/^    def notify_failed_to_scale(self, selectors_hash, pods):$/;"	kind:member	line:92
+notify_if_scaled	../autoscaler/cluster.py	/^                def notify_if_scaled(future):$/;"	kind:function	line:549
+notify_invalid_pod_capacity	../autoscaler/notification.py	/^    def notify_invalid_pod_capacity(self, pod, recommended_capacity):$/;"	kind:member	line:119
+notify_scale	../autoscaler/notification.py	/^    def notify_scale(self, asg, units_requested, pods):$/;"	kind:member	line:64
+operator	../autoscaler/notification.py	/^import operator$/;"	kind:namespace	line:4
+os	../autoscaler/config.py	/^import os$/;"	kind:namespace	line:1
+os	../test/test_azure.py	/^import os$/;"	kind:namespace	line:1
+os	../test/test_capacity.py	/^import os.path$/;"	kind:namespace	line:1
+os	../test/test_cluster.py	/^import os.path$/;"	kind:namespace	line:3
+packages	../setup.py	/^      packages=find_packages(),$/;"	kind:variable	line:5
+parse_SI	../autoscaler/utils.py	/^def parse_SI(s):$/;"	kind:function	line:121
+parse_bool_label	../autoscaler/utils.py	/^def parse_bool_label(value):$/;"	kind:function	line:137
+parse_resource	../autoscaler/utils.py	/^def parse_resource(resource):$/;"	kind:function	line:130
+path	../test/test_capacity.py	/^import os.path$/;"	kind:namespace	line:1
+path	../test/test_cluster.py	/^import os.path$/;"	kind:namespace	line:3
+possible	../autoscaler/kube.py	/^    def possible(self):$/;"	kind:member	line:380
+provider	../autoscaler/autoscaling_groups.py	/^    provider = 'aws'$/;"	kind:variable	line:367
+provider	../autoscaler/azure.py	/^    provider = 'azure'$/;"	kind:variable	line:249
+provider	../autoscaler/azure.py	/^    provider = 'azure'$/;"	kind:variable	line:99
+pykube	../autoscaler/cluster.py	/^import pykube$/;"	kind:namespace	line:12
+pykube	../autoscaler/kube.py	/^import pykube.exceptions$/;"	kind:namespace	line:8
+pykube	../test/test_azure.py	/^import pykube$/;"	kind:namespace	line:7
+pykube	../test/test_capacity.py	/^import pykube$/;"	kind:namespace	line:4
+pykube	../test/test_cluster.py	/^import pykube$/;"	kind:namespace	line:9
+pytz	../autoscaler/autoscaling_groups.py	/^import pytz$/;"	kind:namespace	line:7
+pytz	../autoscaler/azure_api.py	/^import pytz$/;"	kind:namespace	line:12
+pytz	../autoscaler/cluster.py	/^import pytz$/;"	kind:namespace	line:11
+pytz	../test/test_azure.py	/^import pytz$/;"	kind:namespace	line:8
+pytz	../test/test_azure_api.py	/^import pytz$/;"	kind:namespace	line:6
+pytz	../test/test_cluster.py	/^import pytz$/;"	kind:namespace	line:13
+re	../autoscaler/autoscaling_groups.py	/^import re$/;"	kind:namespace	line:3
+re	../autoscaler/azure.py	/^import re$/;"	kind:namespace	line:6
+re	../autoscaler/azure_api.py	/^import re$/;"	kind:namespace	line:3
+re	../autoscaler/utils.py	/^import re$/;"	kind:namespace	line:2
+reconcile_limits	../autoscaler/autoscaling_groups.py	/^    def reconcile_limits(self, asg, activities, dry_run=False):$/;"	kind:member	line:176
+refresh_timeouts	../autoscaler/autoscaling_groups.py	/^    def refresh_timeouts(self, asgs, dry_run=False):$/;"	kind:member	line:104
+requests	../autoscaler/notification.py	/^import requests$/;"	kind:namespace	line:8
+resource	../autoscaler/capacity.py	/^        resource = KubeResource(**resource_spec)$/;"	kind:variable	line:17
+result	../autoscaler/azure_api.py	/^    def result(self):$/;"	kind:member	line:312
+result	../autoscaler/utils.py	/^    def result(self):$/;"	kind:member	line:24
+result	../autoscaler/utils.py	/^    def result(self):$/;"	kind:member	line:35
+result	../autoscaler/utils.py	/^    def result(self):$/;"	kind:member	line:47
+result	../autoscaler/utils.py	/^    def result(self):$/;"	kind:member	line:59
+reverse_bytes	../autoscaler/kube.py	/^def reverse_bytes(value):$/;"	kind:function	line:135
+revert_capacity	../autoscaler/autoscaling_groups.py	/^    def revert_capacity(self, asg, entry, dry_run):$/;"	kind:member	line:151
+scale	../autoscaler/autoscaling_groups.py	/^    def scale(self, new_desired_capacity):$/;"	kind:member	line:440
+scale	../autoscaler/cluster.py	/^    def scale(self, pods_to_schedule, all_nodes, asgs, running_insts_map):$/;"	kind:member	line:264
+scale_loop	../autoscaler/cluster.py	/^    def scale_loop(self):$/;"	kind:member	line:181
+scale_nodes_in	../autoscaler/autoscaling_groups.py	/^    def scale_nodes_in(self, nodes):$/;"	kind:member	line:485
+scale_nodes_in	../autoscaler/azure.py	/^    def scale_nodes_in(self, nodes):$/;"	kind:member	line:232
+selectors	../autoscaler/kube.py	/^    def selectors(self):$/;"	kind:member	line:220
+selectors_to_hash	../autoscaler/utils.py	/^def selectors_to_hash(selectors):$/;"	kind:function	line:68
+setUp	../test/test_capacity.py	/^    def setUp(self):$/;"	kind:member	line:12
+setUp	../test/test_cluster.py	/^    def setUp(self):$/;"	kind:member	line:21
+set_desired_capacity	../autoscaler/autoscaling_groups.py	/^    def set_desired_capacity(self, new_desired_capacity):$/;"	kind:member	line:426
+set_desired_capacity	../autoscaler/azure.py	/^    def set_desired_capacity(self, new_desired_capacity):$/;"	kind:member	line:171
+setup	../setup.py	/^from setuptools import setup, find_packages$/;"	kind:namespace	line:1
+setup.py	../setup.py	1;"	kind:file	line:1
+sort_key	../autoscaler/cluster.py	/^        def sort_key(group):$/;"	kind:function	line:684
+struct_log	../autoscaler/notification.py	/^def struct_log(message, pods, extra=None):$/;"	kind:function	line:43
+struct_logger	../autoscaler/notification.py	/^struct_logger = logging.getLogger('autoscaler.notification.struct')$/;"	kind:variable	line:12
+sys	../main.py	/^import sys$/;"	kind:namespace	line:2
+tearDown	../test/test_cluster.py	/^    def tearDown(self):$/;"	kind:member	line:105
+terminate_instances	../autoscaler/azure.py	/^    def terminate_instances(self, vm_ids):$/;"	kind:member	line:217
+terminate_scale_set_instances	../autoscaler/azure_api.py	/^    def terminate_scale_set_instances(self, scale_set: AzureScaleSet, instances: List[AzureScaleSetInstance]) -> Future:$/;"	kind:member	line:178
+terminate_scale_set_instances	../autoscaler/azure_api.py	/^    def terminate_scale_set_instances(self, scale_set: AzureScaleSet, instances: List[AzureScaleSetInstance]) -> Future:$/;"	kind:member	line:254
+terminate_scale_set_instances	../autoscaler/azure_api.py	/^    def terminate_scale_set_instances(self, scale_set: AzureScaleSet, instances: List[AzureScaleSetInstance]) -> Future:$/;"	kind:member	line:96
+test_azure.py	../test/test_azure.py	1;"	kind:file	line:1
+test_azure_api.py	../test/test_azure_api.py	1;"	kind:file	line:1
+test_basic	../test/test_azure_api.py	/^    def test_basic(self):$/;"	kind:member	line:214
+test_caching	../test/test_azure_api.py	/^    def test_caching(self):$/;"	kind:member	line:28
+test_can_fit	../test/test_capacity.py	/^    def test_can_fit(self):$/;"	kind:member	line:28
+test_capacity.py	../test/test_capacity.py	1;"	kind:file	line:1
+test_cluster.py	../test/test_cluster.py	1;"	kind:file	line:1
+test_copied	../test/test_azure_api.py	/^    def test_copied(self):$/;"	kind:member	line:47
+test_failed_scale_up	../test/test_azure.py	/^    def test_failed_scale_up(self):$/;"	kind:member	line:51
+test_impossible	../test/test_capacity.py	/^    def test_impossible(self):$/;"	kind:member	line:37
+test_inconsistent_delegate	../test/test_azure_api.py	/^    def test_inconsistent_delegate(self):$/;"	kind:member	line:118
+test_max_scale_in	../test/test_cluster.py	/^    def test_max_scale_in(self):$/;"	kind:member	line:157
+test_near_quota_limit	../test/test_azure.py	/^    def test_near_quota_limit(self):$/;"	kind:member	line:156
+test_out_of_quota	../test/test_azure.py	/^    def test_out_of_quota(self):$/;"	kind:member	line:144
+test_out_of_quota	../test/test_azure_api.py	/^    def test_out_of_quota(self):$/;"	kind:member	line:238
+test_possible	../test/test_capacity.py	/^    def test_possible(self):$/;"	kind:member	line:33
+test_prioritization	../test/test_cluster.py	/^    def test_prioritization(self):$/;"	kind:member	line:435
+test_priority	../test/test_azure.py	/^    def test_priority(self):$/;"	kind:member	line:84
+test_reap_dead_node	../test/test_cluster.py	/^    def test_reap_dead_node(self):$/;"	kind:member	line:133
+test_refresh	../test/test_azure_api.py	/^    def test_refresh(self):$/;"	kind:member	line:67
+test_scale_down	../test/test_cluster.py	/^    def test_scale_down(self):$/;"	kind:member	line:230
+test_scale_down_busy	../test/test_cluster.py	/^    def test_scale_down_busy(self):$/;"	kind:member	line:307
+test_scale_down_grace_period	../test/test_cluster.py	/^    def test_scale_down_grace_period(self):$/;"	kind:member	line:283
+test_scale_down_launch_grace_period	../test/test_cluster.py	/^    def test_scale_down_launch_grace_period(self):$/;"	kind:member	line:257
+test_scale_down_under_utilized_drainable	../test/test_cluster.py	/^    def test_scale_down_under_utilized_drainable(self):$/;"	kind:member	line:397
+test_scale_down_under_utilized_undrainable	../test/test_cluster.py	/^    def test_scale_down_under_utilized_undrainable(self):$/;"	kind:member	line:349
+test_scale_in	../test/test_azure.py	/^    def test_scale_in(self):$/;"	kind:member	line:172
+test_scale_up	../test/test_azure.py	/^    def test_scale_up(self):$/;"	kind:member	line:68
+test_scale_up	../test/test_cluster.py	/^    def test_scale_up(self):$/;"	kind:member	line:192
+test_scale_up_notification	../test/test_cluster.py	/^    def test_scale_up_notification(self):$/;"	kind:member	line:202
+test_scale_up_selector	../test/test_cluster.py	/^    def test_scale_up_selector(self):$/;"	kind:member	line:179
+test_slow_scale_up	../test/test_azure.py	/^    def test_slow_scale_up(self):$/;"	kind:member	line:104
+test_tainted_scale_set	../test/test_azure.py	/^    def test_tainted_scale_set(self):$/;"	kind:member	line:122
+test_terminate	../test/test_azure_api.py	/^    def test_terminate(self):$/;"	kind:member	line:151
+test_terminate_with_concurrent_read	../test/test_azure_api.py	/^    def test_terminate_with_concurrent_read(self):$/;"	kind:member	line:178
+test_timed_out_group	../test/test_cluster.py	/^    def test_timed_out_group(self):$/;"	kind:member	line:213
+test_update	../test/test_azure_api.py	/^    def test_update(self):$/;"	kind:member	line:91
+time	../autoscaler/cluster.py	/^import time$/;"	kind:namespace	line:5
+time	../main.py	/^import time$/;"	kind:namespace	line:3
+time_out_asg	../autoscaler/autoscaling_groups.py	/^    def time_out_asg(self, asg, entry):$/;"	kind:member	line:170
+time_out_spot_asgs	../autoscaler/autoscaling_groups.py	/^    def time_out_spot_asgs(self, asgs):$/;"	kind:member	line:301
+timedelta	../autoscaler/azure_api.py	/^from datetime import datetime, timedelta$/;"	kind:namespace	line:8
+timedelta	../test/test_azure.py	/^from datetime import datetime, timedelta$/;"	kind:namespace	line:3
+timedelta	../test/test_cluster.py	/^from datetime import datetime, timedelta$/;"	kind:namespace	line:6
+type	../main.py	/^              type=click.IntRange(0, 3, clamp=True),$/;"	kind:variable	line:58
+uncordon	../autoscaler/kube.py	/^    def uncordon(self):$/;"	kind:member	line:240
+unittest	../test/test_azure.py	/^import unittest$/;"	kind:namespace	line:2
+unittest	../test/test_azure_api.py	/^import unittest$/;"	kind:namespace	line:2
+unittest	../test/test_capacity.py	/^import unittest$/;"	kind:namespace	line:2
+unittest	../test/test_cluster.py	/^import unittest$/;"	kind:namespace	line:4
+unschedulable	../autoscaler/kube.py	/^    def unschedulable(self):$/;"	kind:member	line:224
+update_scale_set	../autoscaler/azure_api.py	/^    def update_scale_set(self, scale_set: AzureScaleSet, new_capacity: int) -> Future:$/;"	kind:member	line:172
+update_scale_set	../autoscaler/azure_api.py	/^    def update_scale_set(self, scale_set: AzureScaleSet, new_capacity: int) -> Future:$/;"	kind:member	line:249
+update_scale_set	../autoscaler/azure_api.py	/^    def update_scale_set(self, scale_set: AzureScaleSet, new_capacity: int) -> Future:$/;"	kind:member	line:93
+utils	../autoscaler/autoscaling_groups.py	/^import autoscaler.utils as utils$/;"	kind:namespace	line:10
+utils	../autoscaler/azure.py	/^import autoscaler.utils as utils$/;"	kind:namespace	line:9
+utils	../autoscaler/cluster.py	/^import autoscaler.utils as utils$/;"	kind:namespace	line:30
+utils	../autoscaler/kube.py	/^import autoscaler.utils as utils$/;"	kind:namespace	line:10
+utils	../test/test_cluster.py	/^import autoscaler.utils as utils$/;"	kind:namespace	line:17
+utils.py	../autoscaler/utils.py	1;"	kind:file	line:1
+version	../setup.py	/^      version='0.0.1',$/;"	kind:variable	line:4
+yaml	../test/test_azure.py	/^import yaml$/;"	kind:namespace	line:9
+yaml	../test/test_capacity.py	/^import yaml$/;"	kind:namespace	line:5
+yaml	../test/test_cluster.py	/^import yaml$/;"	kind:namespace	line:12
