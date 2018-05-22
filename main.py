@@ -40,7 +40,7 @@ DEBUG_LOGGING_MAP = {
 @click.option("--azure-tenant-id", default=None, envvar='AZURE_TENANT_ID')
 @click.option("--aws-access-key", default=None, envvar='AWS_ACCESS_KEY_ID')
 @click.option("--aws-secret-key", default=None, envvar='AWS_SECRET_ACCESS_KEY')
-@click.option("--use-aws-iam-role", required=False, default=False)
+@click.option("--use-aws-iam-role", is_flag=True)
 @click.option("--datadog-api-key", default=None, envvar='DATADOG_API_KEY')
 @click.option("--instance-init-time", default=25 * 60)
 @click.option("--no-scale", is_flag=True)
