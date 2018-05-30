@@ -108,7 +108,11 @@ def _azure_sku_family(name: str) -> str:
     match = re.match('Standard_(?P<family>[A-Z]{1,2})[0-9]{1,2}_?(?P<version>v[0-9])?', name)
     if match is None:
         raise ValueError("SKU not from a recognized family: " + name)
-    result = "standard" + match.group('family')
+    family = match.group('family')
+    result = "standard" + family
+    # Special case for one of Azure's new SKUs :(
+    if family == 'ND':
+        result += 'S'
     if match.group('version') is not None:
         result += match.group('version')
     result += 'Family'
