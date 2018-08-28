@@ -1,15 +1,19 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  annotations:
-    kubernetes.io/created-by: |
-      {"kind":"SerializedReference","apiVersion":"v1","reference":{"kind":"DaemonSet","namespace":"system","name":"container-monitor","uid":"826c7436-4558-11e6-afb0-0af8d945d5d3","apiVersion":"extensions","resourceVersion":"232650804"}}
   creationTimestamp: "2016-08-25T05:11:56Z"
   generateName: container-monitor-
   labels:
     app: container-monitor
   name: container-monitor-y6w5d
   namespace: system
+  ownerReferences:
+  - apiVersion: apps/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: DaemonSet
+    name: container-monitor
+    uid: 826c7436-4558-11e6-afb0-0af8d945d5d3
   resourceVersion: "232653318"
   selfLink: /api/v1/namespaces/system/pods/container-monitor-y6w5d
   uid: 718ec371-6a82-11e6-b203-0a0bdd34364d

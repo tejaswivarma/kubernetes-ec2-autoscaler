@@ -37,6 +37,7 @@ class KubePod(object):
         self.selectors = pod.obj['spec'].get('nodeSelector', {})
         self.labels = metadata.get('labels', {})
         self.annotations = metadata.get('annotations', {})
+        self.owner_references = metadata.get('ownerReferences', [])
         self.owner = self.labels.get('owner', None)
         self.creation_time = dateutil_parse(metadata['creationTimestamp'])
         self.start_time = dateutil_parse(pod.obj['status']['startTime']) if 'startTime' in pod.obj['status'] else None
@@ -84,15 +85,16 @@ class KubePod(object):
                 continue
             self.required_pod_anti_affinity_expressions.append(expression['labelSelector']['matchExpressions'])
 
-
     def is_mirrored(self):
-        created_by = json.loads(self.annotations.get('kubernetes.io/created-by', '{}'))
-        is_daemonset = created_by.get('reference', {}).get('kind') == 'DaemonSet'
+        is_daemonset = False
+        for reference in self.owner_references:
+            if reference.get('kind') == 'DaemonSet':
+                is_daemonset = True
+                break
         return is_daemonset or self.annotations.get('kubernetes.io/config.mirror')
 
     def is_replicated(self):
-        created_by = json.loads(self.annotations.get('kubernetes.io/created-by', '{}'))
-        return created_by
+        return True if len(self.owner_references) > 0 else False
 
     def is_critical(self):
         return utils.parse_bool_label(self.labels.get('openai/do-not-drain'))
