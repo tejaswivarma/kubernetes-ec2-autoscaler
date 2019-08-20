@@ -2,6 +2,8 @@ import datetime
 import json
 import logging
 
+from typing import Iterable, Mapping
+
 from dateutil.parser import parse as dateutil_parse
 import pykube.exceptions
 
@@ -33,11 +35,9 @@ class KubePod(object):
         self.status = pod.obj['status']['phase']
         self.uid = metadata['uid']
         self.selectors = pod.obj['spec'].get('nodeSelector', {})
-        # TODO: Remove this, after everyone has migrated off reservations
-        if 'openai.org/reservation-id' in self.selectors:
-            del self.selectors['openai.org/reservation-id']
         self.labels = metadata.get('labels', {})
         self.annotations = metadata.get('annotations', {})
+        self.owner_references = metadata.get('ownerReferences', [])
         self.owner = self.labels.get('owner', None)
         self.creation_time = dateutil_parse(metadata['creationTimestamp'])
         self.start_time = dateutil_parse(pod.obj['status']['startTime']) if 'startTime' in pod.obj['status'] else None
@@ -75,14 +75,26 @@ class KubePod(object):
             else:
                 logger.warn("Equality tolerations not implemented. Pod {} has an equality toleration".format(pod))
 
+        self.required_pod_anti_affinity_expressions = []
+        anti_affinity_spec = pod.obj['spec'].get('affinity', {}).get('podAntiAffinity', {})
+        required_anti_affinity_expressions = anti_affinity_spec.get('requiredDuringSchedulingIgnoredDuringExecution', []) +\
+                                             anti_affinity_spec.get('requiredDuringSchedulingRequiredDuringExecution', [])
+        for expression in required_anti_affinity_expressions:
+            if expression.get('topologyKey') != 'kubernetes.io/hostname':
+                logger.debug("Pod {} has non-hostname anti-affinity topology. Ignoring".format(pod))
+                continue
+            self.required_pod_anti_affinity_expressions.append(expression['labelSelector']['matchExpressions'])
+
     def is_mirrored(self):
-        created_by = json.loads(self.annotations.get('kubernetes.io/created-by', '{}'))
-        is_daemonset = created_by.get('reference', {}).get('kind') == 'DaemonSet'
+        is_daemonset = False
+        for reference in self.owner_references:
+            if reference.get('kind') == 'DaemonSet':
+                is_daemonset = True
+                break
         return is_daemonset or self.annotations.get('kubernetes.io/config.mirror')
 
     def is_replicated(self):
-        created_by = json.loads(self.annotations.get('kubernetes.io/created-by', '{}'))
-        return created_by
+        return True if len(self.owner_references) > 0 else False
 
     def is_critical(self):
         return utils.parse_bool_label(self.labels.get('openai/do-not-drain'))
@@ -130,6 +142,21 @@ def reverse_bytes(value):
     return result
 
 
+# Returns True iff all expressions in and_expression match labels on pod
+def match_anti_affinity_expression(and_expression: Iterable[Mapping], pod: KubePod):
+    for expression in and_expression:
+        label_value = pod.labels.get(expression['key'])
+        if expression['operator'] == 'In' and label_value not in expression['values']:
+            return False
+        elif expression['operator'] == 'NotIn' and label_value in expression['values']:
+            return False
+        elif expression['operator'] == 'Exists' and label_value is None:
+            return False
+        elif expression['operator'] == 'DoesNotExist' and label_value is not None:
+            return False
+    return True
+
+
 class KubeNode(object):
     _HEARTBEAT_GRACE_PERIOD = datetime.timedelta(seconds=60*60)
 
@@ -140,8 +167,9 @@ class KubeNode(object):
         metadata = node.obj['metadata']
         self.name = metadata['name']
         self.instance_id, self.region, self.instance_type, self.provider = self._get_instance_data()
+        self.pods = []
 
-        self.capacity = KubeResource(**node.obj['status']['capacity'])
+        self.capacity = KubeResource(**node.obj['status']['allocatable'])
         self.used_capacity = KubeResource()
         self.creation_time = dateutil_parse(metadata['creationTimestamp'])
         last_heartbeat_time = self.creation_time
@@ -153,7 +181,10 @@ class KubeNode(object):
         self.no_execute_taints = {}
         for taint in node.obj['spec'].get('taints', []):
             if taint['effect'] == 'NoSchedule':
-                self.no_schedule_taints[taint['key']] = taint['value']
+                try:
+                    self.no_schedule_taints[taint['key']] = taint['value']
+                except:
+                    self.no_schedule_taints[taint['key']] = ""
             if taint['effect'] == 'NoExecute':
                 self.no_execute_taints[taint['key']] = taint['value']
 
@@ -247,6 +278,7 @@ class KubeNode(object):
     def count_pod(self, pod):
         assert isinstance(pod, KubePod)
         self.used_capacity += pod.resources
+        self.pods.append(pod)
 
     def can_fit(self, resources):
         assert isinstance(resources, KubeResource)
@@ -266,6 +298,11 @@ class KubeNode(object):
         for key in self.no_execute_taints:
             if not (pod.no_execute_wildcard_toleration or key in pod.no_execute_existential_tolerations):
                 return False
+        for expression in pod.required_pod_anti_affinity_expressions:
+            for pod in self.pods:
+                if match_anti_affinity_expression(expression, pod):
+                    return False
+
         return True
 
     def is_managed(self):

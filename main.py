@@ -31,6 +31,7 @@ DEBUG_LOGGING_MAP = {
 @click.option("--type-idle-threshold", default=3600*24*7)
 @click.option("--over-provision", default=5)
 @click.option("--max-scale-in-fraction", default=0.1)
+@click.option("--drain-utilization", default=0.0)
 @click.option("--azure-slow-scale-classes", default="")
 @click.option("--azure-resource-groups")
 @click.option("--azure-client-id", default=None, envvar='AZURE_CLIENT_ID')
@@ -39,6 +40,7 @@ DEBUG_LOGGING_MAP = {
 @click.option("--azure-tenant-id", default=None, envvar='AZURE_TENANT_ID')
 @click.option("--aws-access-key", default=None, envvar='AWS_ACCESS_KEY_ID')
 @click.option("--aws-secret-key", default=None, envvar='AWS_SECRET_ACCESS_KEY')
+@click.option("--use-aws-iam-role", is_flag=True)
 @click.option("--datadog-api-key", default=None, envvar='DATADOG_API_KEY')
 @click.option("--instance-init-time", default=25 * 60)
 @click.option("--no-scale", is_flag=True)
@@ -57,8 +59,8 @@ DEBUG_LOGGING_MAP = {
               count=True)
 def main(cluster_name, aws_regions, azure_resource_groups, azure_slow_scale_classes, sleep, kubeconfig,
          azure_client_id, azure_client_secret, azure_subscription_id, azure_tenant_id,
-         aws_access_key, aws_secret_key, pod_namespace, datadog_api_key,
-         idle_threshold, type_idle_threshold, max_scale_in_fraction,
+         aws_access_key, aws_secret_key, use_aws_iam_role, pod_namespace, datadog_api_key,
+         idle_threshold, type_idle_threshold, max_scale_in_fraction, drain_utilization,
          over_provision, instance_init_time, no_scale, no_maintenance,
          slack_hook, slack_bot_token, dry_run, verbose):
     logger_handler = logging.StreamHandler(sys.stderr)
@@ -67,13 +69,14 @@ def main(cluster_name, aws_regions, azure_resource_groups, azure_slow_scale_clas
     logger.setLevel(DEBUG_LOGGING_MAP.get(verbose, logging.CRITICAL))
 
     aws_regions_list = aws_regions.split(',') if aws_regions else []
-    if not (aws_secret_key and aws_access_key) and aws_regions_list:
+    if not ((aws_secret_key and aws_access_key) or use_aws_iam_role) and aws_regions_list:
         logger.error("Missing AWS credentials. Please provide aws-access-key and aws-secret-key.")
         sys.exit(1)
 
     notifier = Notifier(slack_hook, slack_bot_token)
     cluster = Cluster(aws_access_key=aws_access_key,
                       aws_secret_key=aws_secret_key,
+                      use_aws_iam_role=use_aws_iam_role,
                       aws_regions=aws_regions_list,
                       azure_client_id=azure_client_id,
                       azure_client_secret=azure_client_secret,
@@ -88,6 +91,7 @@ def main(cluster_name, aws_regions, azure_resource_groups, azure_slow_scale_clas
                       type_idle_threshold=type_idle_threshold,
                       cluster_name=cluster_name,
                       max_scale_in_fraction=max_scale_in_fraction,
+                      drain_utilization_below=drain_utilization,
                       scale_up=not no_scale,
                       maintainance=not no_maintenance,
                       over_provision=over_provision,

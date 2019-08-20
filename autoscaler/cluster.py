@@ -10,6 +10,9 @@ import botocore.exceptions
 import datadog
 import pytz
 import pykube
+
+from enum import Enum
+
 from azure.mgmt.compute import ComputeManagementClient
 from azure.monitor import MonitorClient
 
@@ -32,7 +35,7 @@ pykube.Pod.objects.namespace = None
 logger = logging.getLogger(__name__)
 
 
-class ClusterNodeState(object):
+class ClusterNodeState(Enum):
     DEAD = 'dead'
     INSTANCE_TERMINATED = 'instance-terminated'
     ASG_MIN_SIZE = 'asg-min-size'
@@ -56,10 +59,6 @@ class Cluster(object):
     # pod scheduling, instead of keeping the cluster at capacity
     # and having to spin up nodes for every job submission
     TYPE_IDLE_COUNT = 5
-
-    # the utilization threshold under which to consider a node
-    # under utilized and drainable
-    UTIL_THRESHOLD = 0.3
 
     # since we pay for the full hour, don't prematurely kill instances
     # the number of minutes into the launch hour at which an instance
@@ -85,6 +84,8 @@ class Cluster(object):
                  azure_resource_group_names, azure_slow_scale_classes, kubeconfig,
                  idle_threshold, type_idle_threshold, pod_namespace,
                  instance_init_time, cluster_name, notifier,
+                 use_aws_iam_role=False,
+                 drain_utilization_below=0.0,
                  max_scale_in_fraction=0.1,
                  scale_up=True, maintainance=True,
                  datadog_api_key=None,
@@ -104,6 +105,7 @@ class Cluster(object):
         else:
             self.pod_namespace = pod_namespace
 
+        self.drain_utilization_below = drain_utilization_below
         self.max_scale_in_fraction = max_scale_in_fraction
         self._drained = {}
         self.session = None
@@ -112,6 +114,8 @@ class Cluster(object):
                 aws_access_key_id=aws_access_key,
                 aws_secret_access_key=aws_secret_key,
                 region_name=aws_regions[0])  # provide a default region
+        elif use_aws_iam_role is True:
+            self.session = boto3.session.Session(region_name=aws_regions[0])  # provide a default region
         self.autoscaling_groups = autoscaling_groups.AutoScalingGroups(
             session=self.session, regions=aws_regions,
             cluster_name=cluster_name)
@@ -215,6 +219,8 @@ class Cluster(object):
                     # Force a refresh of the cache to pick up any new Scale Sets that have been created
                     # or modified externally.
                     self.azure_client.list_scale_sets(resource_group, force_refresh=True)
+                    # Force a refresh of the cache in case our quota was adjusted
+                    self.azure_client.invalidate_quota_cache(resource_group)
             asgs = self.autoscaling_groups.get_all_groups(all_nodes)
             azure_groups = self.azure_groups.get_all_groups(all_nodes)
             scaling_groups = asgs + azure_groups
@@ -332,6 +338,7 @@ class Cluster(object):
 
         nodes_to_scale_in = {}
         nodes_to_delete = []
+        state_counts = dict((state, 0) for state in ClusterNodeState)
         for node in cached_managed_nodes:
             asg = utils.get_group_for_node(asgs, node)
             state = self.get_node_state(
@@ -339,9 +346,7 @@ class Cluster(object):
                 running_insts_map, idle_selector_hash)
 
             logger.info("node: %-*s state: %s" % (75, node, state))
-            self.stats.increment(
-                'kubernetes.custom.node.state.{}'.format(state.replace('-', '_')),
-                timestamp=stats_time)
+            state_counts[state] += 1
 
             # state machine & why doesnt python have case?
             if state in (ClusterNodeState.POD_PENDING, ClusterNodeState.BUSY,
@@ -403,10 +408,14 @@ class Cluster(object):
             else:
                 raise Exception("Unhandled state: {}".format(state))
 
+        for state, count in state_counts.items():
+            self.stats.gauge('kubernetes.custom.node.state.{}'.format(state.value.replace('-', '_')), count)
+
         # these are instances that have been running for a while but it's not properly managed
         #   i.e. not having registered to kube or not having proper meta data set
         managed_instance_ids = set(node.instance_id for node in cached_managed_nodes)
         instances_to_terminate = {}
+        unmanaged_instance_count = 0
         for asg in asgs:
             unmanaged_instance_ids = (asg.instance_ids - managed_instance_ids)
             if len(unmanaged_instance_ids) > 0:
@@ -418,9 +427,7 @@ class Cluster(object):
                             if not self.dry_run:
                                 logger.info("terminating unmanaged %s" % inst)
                                 instances_to_terminate.setdefault(asg, []).append(inst_id)
-                                self.stats.increment(
-                                    'kubernetes.custom.node.state.unmanaged',
-                                    timestamp=stats_time)
+                                unmanaged_instance_count += 1
                                 # TODO: try to delete node from kube as well
                                 # in the case where kubelet may have registered but node
                                 # labels have not been applied yet, so it appears unmanaged
@@ -436,15 +443,14 @@ class Cluster(object):
                                 asg.client.terminate_instance_in_auto_scaling_group(
                                     InstanceId=inst.id, ShouldDecrementDesiredCapacity=False)
                                 logger.info("terminating unmanaged %s" % inst)
-                                self.stats.increment(
-                                    'kubernetes.custom.node.state.unmanaged',
-                                    timestamp=stats_time)
+                                unmanaged_instance_count += 1
                                 # TODO: try to delete node from kube as well
                                 # in the case where kubelet may have registered but node
                                 # labels have not been applied yet, so it appears unmanaged
                             else:
                                 logger.info(
                                     '[Dry run] Would have terminated unmanaged %s [%s]', inst, asg.region)
+        self.stats.gauge('kubernetes.custom.node.state.unmanaged', unmanaged_instance_count)
 
         async_operations = []
         total_instances = max(sum(len(asg.instance_ids) for asg in asgs), len(cached_managed_nodes))
@@ -720,7 +726,7 @@ class Cluster(object):
         busy_list = [p for p in node_pods if not p.is_mirrored()]
         undrainable_list = [p for p in node_pods if not p.is_drainable()]
         utilization = sum((p.resources for p in busy_list), KubeResource())
-        under_utilized = (self.UTIL_THRESHOLD *
+        under_utilized = (self.drain_utilization_below *
                           node.capacity - utilization).possible
         drainable = not undrainable_list
 

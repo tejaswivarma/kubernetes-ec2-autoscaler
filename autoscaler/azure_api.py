@@ -108,7 +108,11 @@ def _azure_sku_family(name: str) -> str:
     match = re.match('Standard_(?P<family>[A-Z]{1,2})[0-9]{1,2}_?(?P<version>v[0-9])?', name)
     if match is None:
         raise ValueError("SKU not from a recognized family: " + name)
-    result = "standard" + match.group('family')
+    family = match.group('family')
+    result = "standard" + family
+    # Special case for one of Azure's new SKUs :(
+    if family == 'ND':
+        result += 'S'
     if match.group('version') is not None:
         result += match.group('version')
     result += 'Family'
@@ -186,8 +190,8 @@ class AzureWrapper(AzureApi):
             if vm_size.name == sku:
                 cores_per_instance = vm_size.number_of_cores
 
-        logger.warn("No metadata found for sku: " + sku)
         if cores_per_instance is None:
+            logger.warn("No metadata found for sku: " + sku)
             return 0
 
         for usage in self._compute_client.usage.list(location=resource_group.location):
@@ -206,6 +210,11 @@ class AzureWriteThroughCachedApi(AzureApi):
         self._scale_set_cache: MutableMapping[str, List[AzureScaleSet]] = {}
         self._remaining_instances_cache: MutableMapping[str, MutableMapping[str, int]] = {}
 
+    def invalidate_quota_cache(self, resource_group_name: str) -> None:
+        with self._lock:
+            if resource_group_name in self._remaining_instances_cache:
+                del self._remaining_instances_cache[resource_group_name]
+
     def list_scale_sets(self, resource_group_name: str, force_refresh=False) -> List[AzureScaleSet]:
         if not force_refresh:
             with self._lock:
@@ -216,10 +225,10 @@ class AzureWriteThroughCachedApi(AzureApi):
         with self._lock:
             old_scale_sets = dict((x.name, x) for x in self._scale_set_cache.get(resource_group_name, []))
             for scale_set in scale_sets:
-                if scale_set.name not in old_scale_sets:
+                old_scale_set = old_scale_sets.get(scale_set.name)
+                if not old_scale_set:
                     continue
 
-                old_scale_set = old_scale_sets.get(scale_set.name)
                 # Check if Scale Set was changed externally
                 if old_scale_set.capacity != scale_set.capacity:
                     if (resource_group_name, scale_set.name) in self._instance_cache:

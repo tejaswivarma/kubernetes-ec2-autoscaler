@@ -203,6 +203,9 @@ class AzureVirtualScaleSet(AutoScalingGroup):
             if scale_out == 0 or remaining_instances == 0:
                 break
 
+        if remaining_instances == 0:
+            logger.warning("Out of quota for {}!".format(self.instance_type))
+
         if scale_out > 0:
             logger.error("Not enough scale sets to reach desired capacity {} for {}".format(new_desired_capacity, self))
 

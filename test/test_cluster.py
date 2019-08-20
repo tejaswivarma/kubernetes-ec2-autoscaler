@@ -93,12 +93,14 @@ class TestCluster(unittest.TestCase):
             azure_slow_scale_classes=[],
             kubeconfig='~/.kube/config',
             pod_namespace=None,
+            drain_utilization_below=0.3,
             idle_threshold=60,
             instance_init_time=60,
             type_idle_threshold=60,
             cluster_name='dummy-cluster',
             notifier=mock.Mock(),
-            dry_run=False
+            dry_run=False,
+            use_aws_iam_role=False
         )
 
     def tearDown(self):

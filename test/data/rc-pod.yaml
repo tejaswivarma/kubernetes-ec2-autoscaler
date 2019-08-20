@@ -1,15 +1,19 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  annotations:
-    kubernetes.io/created-by: |
-      {"kind":"SerializedReference","apiVersion":"v1","reference":{"kind":"ReplicationController","namespace":"system","name":"autoscaler","uid":"bfa94a99-47e6-11e6-8fc1-06a19a97a573","apiVersion":"v1","resourceVersion":"234694841"}}
   creationTimestamp: "2016-08-25T20:36:43Z"
   generateName: autoscaler-
   labels:
     app: autoscaler
   name: autoscaler-opnax
   namespace: system
+  ownerReferences:
+  - apiVersion: apps/v1
+    blockOwnerDeletion: true
+    controller: true
+    kind: ReplicationController
+    name: autoscaler
+    uid: bfa94a99-47e6-11e6-8fc1-06a19a97a573
   resourceVersion: "234714730"
   selfLink: /api/v1/namespaces/system/pods/autoscaler-opnax
   uid: a2acf237-6b03-11e6-b203-0a0bdd34364d
